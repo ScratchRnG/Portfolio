@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Memory Forensics Investigation | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Memory Forensics Investigation</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>What is the build version of the operating system?</h2>
+
+    <pre><code>vol.py -f "C:\Users\B1gB1\Downloads\memory capture\memory.vmem" windows.info.Info</code></pre>
+
+    <pre><code>Kernel Base     0xf8073e400000
+DTB     0x1ad000
+Symbols file:///C:/Users/B1gB1/Desktop/Tools/volatility3-develop/volatility3/symbols/windows/ntkrnlmp.pdb/CA8E2F01B822EDE6357898BFBF862997-1.json.xz
+Is64Bit True
+IsPAE   False
+layer_name      0 WindowsIntel32e
+memory_layer    1 VmwareLayer
+base_layer      2 FileLayer
+meta_layer      2 FileLayer
+KdVersionBlock  0xf8073f00f368
+Major/Minor     15.19041
+MachineType     34404
+KeNumberProcessors      2
+SystemTime      2023-05-30 02:09:03+00:00
+NtSystemRoot    C:\Windows
+NtProductType   NtProductWinNt
+NtMajorVersion  10
+NtMinorVersion  0
+PE MajorOperatingSystemVersion  10
+PE MinorOperatingSystemVersion  0
+PE Machine      34404
+PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
+
+    <p><strong>Answer:</strong></p>
+    <pre><code>19041</code></pre>
+
+    <hr>
+
+    <h2>What is the computer hostname?</h2>
+
+    <p><strong>Answer:</strong></p>
+    <pre><code>DESKTOP-38NVPD0</code></pre>
+
+    <p>
+      To get this, I first analyzed registry hives with the following plugin:
+      <code>windows.registry.hivelist.HiveList</code>
+    </p>
+
+    <p>
+      Within there, we get this result:
+    </p>
+
+    <pre><code>0x8a0d9148a000  \REGISTRY\MACHINE\SYSTEM        Disabled</code></pre>
+
+    <p>
+      Here, the offset <code>0x8a0d9148a000</code> corresponds to the SYSTEM hive in memory.
+      This offset is crucial because the SYSTEM hive contains configuration data, including the hostname.
+    </p>
+
+    <pre><code>vol.py -f "C:\Users\B1gB1\Downloads\memory capture\memory.vmem" windows.registry.printkey --offset 0x8a0d9148a000 --key ControlSet001\Control\ComputerName\ComputerName</code></pre>
+
+    <pre><code>2023-05-22 07:00:31.000000 UTC  0x8a0d9148a000  REG_SZ  \REGISTRY\MACHINE\SYSTEM\ControlSet001\Control\ComputerName\ComputerName        ComputerName    DESKTOP-38NVPD0 False</code></pre>
+
+    <hr>
+
+    <h2>What is the name of the downloaded ZIP file?</h2>
+
+    <p>
+      For this, I utilized FTK imager along with the .ds1 file provided.
+      Once in, there was only ONE user named john.
+      I simply navigated to his downloads as found what I needed.
+    </p>
+
+    <pre><code>Data_Recovery.zip</code></pre>
+
+    <p>(file was downloaded at 2:04:34 AM on 5/30/2023)</p>
+
+    <hr>
+
+    <h2>What is the domain of the website (including the third-level domain) from which the file was downloaded?</h2>
+
+    <p><strong>Answer:</strong></p>
+    <pre><code>praetorial-gears.000webhostapp.com</code></pre>
+
+    <p>
+      Knowing there was a file download activity, and a pcap file at our disposal,
+      I pivoted to Wireshark to analyze the data.
+    </p>
+
+    <p>
+      I filtered for port 80, to investigate any clear text communication.
+      There was a ton of activity!
+    </p>
+
+    <p>
+      Instead of reading through all the packets, I navigated to export objects,
+      and selected HTTP. Once in there, i got a clean view of file downloads,
+      urls, and domains. Here i found Data_Recovery.zip
+    </p>
+
+    <hr>
+
+    <h2>The user then executed the suspicious application found in the ZIP archive. What is the process PID?</h2>
+
+    <p>
+      To find this, I went back to ftk imager, and saw john had unzipped the zip.
+      Within the folder, there was Recovery_Setup.exe.
+    </p>
+
+    <p>
+      Now knowing the exe, I went to volatility and analyzed all processes running,
+      which led me to:
+    </p>
+
+    <pre><code>484</code></pre>
+
+    <hr>
+
+    <h2>What is the full path of the suspicious process?</h2>
+
+    <pre><code>C:\Users\John\Downloads\Data_Recovery\Recovery_Setup.exe</code></pre>
+
+    <hr>
+
+    <h2>What is the SHA-256 hash of the suspicious executable?</h2>
+
+    <pre><code>c34601c5da3501f6ee0efce18de7e6145153ecfac2ce2019ec52e1535a4b3193</code></pre>
+
+    <p>
+      To get this, I went to FTK imager, extracted the hashes by right clicking the exe.
+      Unfortunately, it only gave me MD5 and SHA256.
+      But i took the MD5 value, threw it to VT, and got the SHA256 in the details pane of VT.
+    </p>
+
+    <hr>
+
+    <h2>When was the malicious program first executed?</h2>
+
+    <pre><code>2023-05-30 02:06:29</code></pre>
+
+    <pre><code>vol.py -f "C:\Users\B1gB1\Downloads\memory capture\memory.vmem" windows.registry.amcache.Amcache</code></pre>
+
+    <p>amcache allows us to see when a program was executed.</p>
+
+    <hr>
+
+    <h2>How many times in total has the malicious application been executed?</h2>
+
+    <pre><code>2</code></pre>
+
+    <p>
+      we see it twice in amcache.
+    </p>
+
+    <hr>
+
+    <h2>The malicious application references two .TMP files, one is IS-NJBAT.TMP, which is the other?</h2>
+
+    <p>
+      I left off where i was going to extract the prefetch of recovery from ftk.
+    </p>
+
+    <pre><code>.\PECmd.exe -f C:\Users\B1gB1\Desktop\RECOVERY_SETUP.EXE-A808CDAB.pf</code></pre>
+
+    <pre><code>IS-R7RFP.TMP</code></pre>
+
+    <hr>
+
+    <h2>How many of the URLs contacted by the malicious application were detected as malicious by VirusTotal?</h2>
+
+    <p>
+      In virus total, I navigated to relations where i found multiple IPs:
+      all of the http://45.12.253.... were present in the Wireshark export HTTP objects.
+    </p>
+
+    <hr>
+
+    <h2>The malicious application downloaded a binary file from one of the C2 URLs, what is the name of the file?</h2>
+
+    <pre><code>puk.php</code></pre>
+
+    <p>
+      For this one, all i did was analyze wireshark and the export objects once again.
+      One of the files downloaded from the URLs seen in the previous question was puk.php.
+    </p>
+
+  </main>
+
+</div>
+
+</body>
+</html>

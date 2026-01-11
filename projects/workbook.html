@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Microsoft Sentinel Workbook | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Microsoft Sentinel Workbook</h1>
+    <a class="back-link" href="../index.html">← Back to Projects</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Authentication & Privileged Activity Investigation Dashboard</h2>
+
+    <h2>Project Overview</h2>
+    <p>
+      This project demonstrates the design and implementation of a Microsoft Sentinel workbook to support security operations and incident response investigations. The workbook centralizes authentication telemetry and privileged account activity to help analysts quickly identify suspicious behavior, assess risk, and pivot during investigations.
+      The dashboard is built using Azure Monitor Workbooks and leverages Kusto Query Language (KQL) to transform raw security logs into actionable insights.
+    </p>
+
+    <h2>What Is a Microsoft Sentinel Workbook?</h2>
+    <p>
+      A Microsoft Sentinel workbook is a customizable reporting and visualization tool built on Azure Monitor Workbooks. It enables security teams to analyze and explore log data collected from multiple sources through an interactive, analyst-friendly interface.
+    </p>
+
+    <p>Workbooks allow SOC analysts to:</p>
+    <ul>
+      <li>Visualize large volumes of security telemetry</li>
+      <li>Investigate anomalies and trends</li>
+      <li>Perform drill-downs during active incidents</li>
+      <li>Support threat hunting and monitoring workflows</li>
+    </ul>
+
+    <h2>Key Workbook Components</h2>
+
+    <h3>Data Sources</h3>
+    <p>
+      Workbooks retrieve data from Azure Log Analytics tables, including identity, security, and audit logs used by Microsoft Sentinel.
+    </p>
+
+    <h3>Kusto Query Language (KQL)</h3>
+    <p>
+      KQL is used to query, filter, and correlate security data across multiple log sources.
+    </p>
+
+    <h3>Visualization Components</h3>
+    <p>
+      Data is presented using tables, charts, and graphs to improve visibility and analyst decision-making.
+    </p>
+
+    <h3>Filters & Parameters</h3>
+    <p>
+      Interactive filters and parameters allow analysts to adjust time ranges, focus on specific users, and drill into detailed log activity.
+    </p>
+
+    <h2>Prerequisites</h2>
+    <p>
+      To create or interact with Microsoft Sentinel workbooks, the following permissions are required:
+    </p>
+    <ul>
+      <li>Workbook Reader or</li>
+      <li>Workbook Contributor</li>
+    </ul>
+    <p>
+      Permissions must be assigned on the resource group containing the Microsoft Sentinel workspace.
+    </p>
+
+    <h2>Workbook Purpose</h2>
+    <h3>Authentication & Privileged Activity Investigation Dashboard</h3>
+
+    <p>This workbook centralizes:</p>
+    <ul>
+      <li>Authentication volume trends</li>
+      <li>Location-based anomalies</li>
+      <li>Risky sign-in activity</li>
+      <li>Privileged account usage</li>
+    </ul>
+
+    <p>
+      The goal is to reduce investigation time by surfacing identity-based threats commonly associated with:
+    </p>
+    <ul>
+      <li>Account compromise</li>
+      <li>Lateral movement</li>
+      <li>Privilege abuse</li>
+      <li>Persistence attempts</li>
+    </ul>
+
+    <h2>Workbook Sections & Queries</h2>
+
+    <h3>Section 1: Authentication Volume Baseline</h3>
+    <p>
+      Establishes a baseline of authentication activity over time to help identify spikes or abnormal sign-in behavior.
+    </p>
+
+    <pre><code>SignInLogs
+| where TimeGenerated >= ago(7d)
+| summarize SignIns = count() by bin(TimeGenerated, 1h)</code></pre>
+
+    <h3>Section 2: Impossible Travel & Location Anomalies</h3>
+    <p>
+      Identifies users who successfully authenticated from multiple geographic locations within a short time window.
+    </p>
+
+    <pre><code>SignInLogs
+| where TimeGenerated >= ago(7d)
+| where ResultType == 0
+| summarize Locations = make_set(Location) by UserPrincipalName
+| where array_length(Locations) > 1</code></pre>
+
+    <p><strong>Visualization:</strong> Table</p>
+    <p><strong>Key Columns:</strong> UserPrincipalName, Locations</p>
+
+    <p>
+      This section helps analysts quickly flag potential credential compromise.
+    </p>
+
+    <h3>Section 3: Risky Sign-Ins</h3>
+    <p>
+      Surfaces users with elevated sign-in risk based on identity protection signals.
+    </p>
+
+    <pre><code>SignInLogs
+| where TimeGenerated >= ago(7d)
+| where RiskState != "none"
+| summarize Count = count() by UserPrincipalName, RiskLevel, RiskState
+| order by Count desc</code></pre>
+
+    <p>
+      This provides immediate visibility into high-risk authentication activity.
+    </p>
+
+    <h3>Section 4: Privileged Account Usage</h3>
+    <p>
+      Tracks authentication activity involving highly privileged roles to detect misuse or unexpected access patterns.
+    </p>
+
+    <pre><code>SignInLogs
+| where TimeGenerated >= ago(7d)
+| where AssignedRoles has_any ("Global Administrator", "Privileged Role Administrator")
+| summarize SignIns = count() by UserPrincipalName, AppDisplayName</code></pre>
+
+    <p>
+      Monitoring privileged accounts is critical due to their elevated impact on the environment.
+    </p>
+
+    <h2>Outcome & Value</h2>
+    <ul>
+      <li>Centralizes identity telemetry into a single investigative view</li>
+      <li>Supports faster triage and decision-making</li>
+      <li>Demonstrates practical SOC workflows using Sentinel and KQL</li>
+      <li>Reflects real-world security monitoring and incident response use cases</li>
+    </ul>
+
+  </main>
+
+   <h2>Project Screenshots</h2>
+
+<div class="screenshot-grid">
+
+  <figure>
+    <img src="../assets/images/workbook/Picture1.png" alt="Microsoft Sentinel Workbook Overview">
+    <figcaption>Authentication & Privileged Activity Investigation Dashboard overview.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="../assets/images/workbook/Picture2.png" alt="Microsoft Sentinel Workbook Overview">
+    <figcaption>Authentication & Privileged Activity Investigation Dashboard overview.</figcaption>
+  </figure>
+
+
+</div>
+
+</div>
+
+</body>
+</html>

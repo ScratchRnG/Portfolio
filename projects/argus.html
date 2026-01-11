@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ARGUS IDS | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>ARGUS – AI-Assisted Host-Based Intrusion Detection System</h1>
+    <a class="back-link" href="../index.html">← Back to Projects</a>
+  </header>
+
+  <!-- Main Content Card -->
+  <main class="argus-content">
+
+    <h2>Host-Based Intrusion Detection System (HIDS) with AI-Assisted Analysis</h2>
+
+    <p>
+      Argus is a custom
+      <strong>Host-Based Intrusion Detection System (HIDS)</strong> that integrates
+      <strong>Suricata</strong>, real-time monitoring agents, and an
+      <strong>AI-powered analysis dashboard</strong> to detect, visualize,
+      and respond to malicious activity.
+    </p>
+
+    <h2>Overview</h2>
+    <p>
+      The system continuously monitors host and network activity using Suricata
+      to detect suspicious and malicious traffic. Detected events are parsed,
+      enriched, and securely forwarded to a custom-built web dashboard where
+      analysts can view alerts, investigate trends, and receive automated guidance.
+    </p>
+
+    <h2>Key Features</h2>
+
+    <h3>Real-Time Threat Detection</h3>
+    <p>
+      Suricata analyzes traffic and generates alerts based on signature-based
+      detection, which are streamed live to the dashboard.
+    </p>
+
+    <h3>Centralized Security Dashboard</h3>
+    <p>
+      A Flask-based dashboard provides:
+    </p>
+    <ul>
+      <li>Live alert feeds</li>
+      <li>Severity breakdowns</li>
+      <li>Alert trends over time</li>
+      <li>Source and destination IP visibility</li>
+      <li>Host CPU health and open port monitoring</li>
+      <li>Windows endpoint event ingestion and device health tracking</li>
+    </ul>
+
+    <h3>AI-Powered Security Assistant</h3>
+    <p>
+      An integrated AI chatbot (built with LangChain and Ollama) helps analysts
+      interpret alerts, classifications, and system health data.
+      The assistant is intentionally scoped to IDS-related context to provide
+      concise, relevant explanations and reduce analyst fatigue.
+    </p>
+
+    <h3>Automated Email Alerting</h3>
+    <p>
+      When malicious traffic is detected, the system automatically sends email
+      notifications to security personnel, ensuring timely awareness and rapid response.
+    </p>
+
+    <h3>Host Telemetry Collection</h3>
+    <p>
+      Lightweight background agents collect:
+    </p>
+    <ul>
+      <li>Open port information</li>
+      <li>CPU utilization</li>
+      <li>Windows event logs and device health</li>
+    </ul>
+    <p>
+      This data is correlated with network alerts to improve investigation context.
+    </p>
+
+    <h3>Secure Access & Authentication</h3>
+    <p>
+      The dashboard includes user authentication and session management to
+      restrict access to authorized users.
+    </p>
+
+    <h2>Technologies Used</h2>
+    <ul>
+      <li><strong>Detection & Monitoring:</strong> Suricata</li>
+      <li><strong>Backend:</strong> Python, Flask, Flask-SocketIO</li>
+      <li><strong>Frontend:</strong> HTML, CSS, JavaScript</li>
+      <li><strong>AI Integration:</strong> LangChain, Ollama (LLM-based assistant)</li>
+      <li><strong>Data Handling:</strong> JSON, SQLite</li>
+      <li><strong>Alerting:</strong> SMTP Email Notifications</li>
+      <li><strong>System Telemetry:</strong> psutil, custom monitoring agents</li>
+    </ul>
+
+  </main>
+
+  <!-- Screenshots -->
+  <section class="screenshots-section">
+    <h2>Project Screenshot</h2>
+    <div class="screenshot-grid">
+      <figure>
+        <img src="../assets/images/argus/Dashboard.png" alt="ARGUS dashboard overview">
+        <figcaption>ARGUS dashboard overview</figcaption>
+      </figure>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

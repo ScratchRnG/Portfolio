@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: rogue-one | Joan Dimas</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+<header class="argus-header">
+  <h1>Sherlock: rogue-one</h1>
+  <nav>
+    <a href="../index.html">← Back to HTB Writeups</a>
+  </nav>
+</header>
+
+<main class="argus-content fade-in">
+
+  <h2>Overview</h2>
+  <p>
+    Your SIEM system generated multiple alerts in less than a minute, indicating potential C2 communication from Simon Stark's workstation. Despite Simon not noticing anything unusual, the IT team had him share screenshots of his task manager to check for any unusual processes. No suspicious processes were found, yet alerts about C2 communications persisted. The SOC manager then directed the immediate containment of the workstation and a memory dump for analysis. As a memory forensics expert, you are tasked with assisting the SOC team at Forela to investigate and resolve this urgent incident.
+  </p>
+
+  <h2>Key Artifacts</h2>
+  <ul>
+    <li>memory dump (.mem)</li>
+  </ul>
+
+  <h2>Investigation Steps</h2>
+
+  <!-- TASK 1 -->
+  <div class="task">
+    <h3>1. Identification of the Malicious Process</h3>
+
+    <p><strong>Malicious Process:</strong> <code>svchost.exe</code><br>
+       <strong>Process ID (PID):</strong> <strong>6812</strong></p>
+
+    <p><strong>Method Used:</strong></p>
+    <pre><code>vol.py -f "C:\Users\B1gB1\Desktop\20230810.mem" windows.malware.malfind.Malfind</code></pre>
+
+    <p><strong>Explanation:</strong><br>
+      The <code>malfind</code> plugin identified injected/malicious memory regions associated
+      with <code>svchost.exe</code>. The suspicious process appeared near the bottom of the
+      output, confirming PID <strong>6812</strong> as the malicious process.
+    </p>
+  </div>
+
+  <!-- TASK 2 -->
+  <div class="task">
+    <h3>2. Child Process Spawned by the Malicious Process</h3>
+
+    <p><strong>Child Process:</strong> <code>cmd.exe</code><br>
+       <strong>Child Process ID (PID):</strong> <strong>4364</strong></p>
+
+    <p><strong>Method Used:</strong></p>
+    <pre><code>vol.py -f "C:\Users\B1gB1\Desktop\20230810.mem" windows.pslist.PsList</code></pre>
+
+    <p><strong>Relevant Output:</strong></p>
+    <pre><code>PID   PPID  Name
+4364  6812  cmd.exe</code></pre>
+
+    <p><strong>Explanation:</strong><br>
+      Analysis of the process list shows that the malicious <code>svchost.exe</code>
+      process (PID 6812) spawned a <code>cmd.exe</code> instance (PID 4364), which likely
+      enabled the threat actor to execute commands on the system.
+    </p>
+  </div>
+
+  <!-- TASK 3 -->
+  <div class="task">
+    <h3>3. Malicious File Extraction & MD5 Hash</h3>
+
+    <p><strong>Malicious File:</strong> <code>svchost.exe</code> (dumped from memory)<br>
+       <strong>MD5 Hash:</strong> <strong>5bd547c6f5bfc4858fe62c8867acfbb5</strong></p>
+
+    <p><strong>File Dump Command:</strong></p>
+    <pre><code>vol.py -f "C:\Users\B1gB1\Desktop\20230810.mem" windows.dumpfiles.DumpFiles --pid 6812</code></pre>
+
+    <p><strong>Relevant Dump Output:</strong></p>
+    <pre><code>ImageSectionObject svchost.exe file.0x9e8b91ec0140.0x9e8b957f24c0.ImageSectionObject.svchost.exe.img</code></pre>
+
+    <p><strong>Hash Calculation:</strong></p>
+    <pre><code>certutil -hashfile file.0x9e8b91ec0140.0x9e8b957f24c0.ImageSectionObject.svchost.exe.img MD5</code></pre>
+
+    <p><strong>Explanation:</strong><br>
+      After dumping files associated with PID 6812, the extracted <code>svchost.exe</code>
+      image was located in the working directory. The MD5 hash was calculated using
+      <code>certutil</code> and forwarded to the reverse engineering team.
+    </p>
+  </div>
+
+  <!-- TASK 4 -->
+  <div class="task">
+    <h3>4. Command-and-Control (C2) Infrastructure</h3>
+
+    <p><strong>C2 IP Address:</strong> <strong>13.127.155.166</strong><br>
+       <strong>C2 Port:</strong> <strong>8888</strong></p>
+
+    <p><strong>Method Used:</strong></p>
+    <pre><code>vol.py -f "C:\Users\B1gB1\Desktop\20230810.mem" windows.netstat.NetStat</code></pre>
+
+    <p><strong>Relevant Output:</strong></p>
+    <pre><code>TCPv4 172.17.79.131:64254 → 13.127.155.166:8888 ESTABLISHED PID: 6812 | Process: svchost.exe</code></pre>
+
+    <p><strong>Explanation:</strong><br>
+      Network analysis revealed an established outbound TCP connection from the malicious
+      <code>svchost.exe</code> process to the external IP over port <code>8888</code>,
+      confirming the C2 channel.
+    </p>
+  </div>
+
+  <!-- TASK 5 -->
+  <div class="task">
+    <h3>5. Timeline: Process Execution & C2 Establishment</h3>
+
+    <p><strong>Date & Time (UTC):</strong> <strong>10/08/2023 11:30:03</strong></p>
+
+    <p><strong>Explanation:</strong><br>
+      The timestamp was obtained directly from the established C2 network connection
+      associated with PID 6812, indicating when the malicious process was active.
+    </p>
+  </div>
+
+  <!-- TASK 6 -->
+  <div class="task">
+    <h3>6. Memory Offset of the Malicious Process</h3>
+
+    <p><strong>Memory Offset:</strong> <strong>0x9e8b87762080</strong></p>
+
+    <p><strong>Method Used:</strong></p>
+    <pre><code>vol.py -f "C:\Users\B1gB1\Desktop\20230810.mem" windows.pslist.PsList</code></pre>
+
+    <p><strong>Relevant Output:</strong></p>
+    <pre><code>PID: 6812 | Name: svchost.exe | Offset: 0x9e8b87762080</code></pre>
+  </div>
+
+  <!-- TASK 7 -->
+  <div class="task">
+    <h3>7. VirusTotal First Submission Timestamp</h3>
+
+    <p><strong>First Submission Date & Time (UTC):</strong> <strong>10/08/2023 11:58:10</strong></p>
+
+    <p><strong>Method Used:</strong><br>
+      The MD5 hash of the dumped malicious file was searched on VirusTotal. The timestamp
+      was obtained from the <strong>Details</strong> tab.
+    </p>
+
+    <p><strong>Explanation:</strong><br>
+      This confirms the malware sample had already been uploaded shortly after the
+      incident, likely by the reverse engineering team.
+    </p>
+  </div>
+
+  <h2>Findings</h2>
+
+  <ul>
+    <li>
+      Memory analysis identified a maliciously injected <code>svchost.exe</code>
+      process (PID 6812) using Volatility’s <code>malfind</code> plugin.
+    </li>
+    <li>
+      The compromised <code>svchost.exe</code> spawned a <code>cmd.exe</code> child
+      process, indicating interactive command execution by the attacker.
+    </li>
+    <li>
+      Network artifacts confirmed an active C2 channel from the malicious process
+      to <strong>13.127.155.166</strong> over TCP port <strong>8888</strong>.
+    </li>
+    <li>
+      The malicious binary was successfully extracted from memory, hashed, and
+      later confirmed to have been submitted to VirusTotal shortly after execution.
+    </li>
+  </ul>
+
+  <h2>Conclusion & Lessons Learned</h2>
+
+  <ul>
+    <li>
+      This investigation shows that trusted Windows processes like svchost.exe can be abused through memory injection and should always be validated through behavioral analysis. Memory forensics plays a critical role in identifying fileless malware that does not leave traditional disk artifacts. Correlating process relationships with network connections allows investigators to accurately confirm command-and-control activity. Rapid extraction and hashing of malicious samples supports timely threat intelligence sharing and incident response.
+    </li>
+  </ul>
+
+</main>
+
+</div>
+
+</body>
+</html>

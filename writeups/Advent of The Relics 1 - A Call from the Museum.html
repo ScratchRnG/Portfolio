@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advent of The Relics 1 - A Call from the Museum </title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Advent of The Relics 1 - A Call from the Museum</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+      In this Sherlock-style investigation, an employee at CALE receives an unexpected email and follows its instructions,
+      triggering suspicious activity that causes them to panic and pull the power cable. A month later, the same email becomes
+      the starting point for a cyber investigation. The objective is to trace the infection chain starting from the email,
+      identify the malicious attachment and indicators, and uncover the command-and-control infrastructure and second-stage delivery.
+    </p>
+
+    <h2>Video Walkthrough</h2>
+    <p>
+      This write-up is provided as a YouTube walkthrough where I demonstrate the investigative workflow, key pivots, and how each
+      artifact leads to the final conclusions.
+    </p>
+
+    <!-- YouTube Link -->
+    <h2>YouTube Link</h2>
+    <p>
+      <a class="nav-btn active" href="PASTEMYYOUTUBELINKHERE" target="_blank" rel="noopener noreferrer">
+        ▶ Watch the Walkthrough on YouTube (Not yet available, as the Sherlock is currently active. Per HTB guidelines, the video will be published once the machine is retired.).
+      </a>
+    </p>
+
+    <h2>Key Artifacts</h2>
+    <ul>
+      <li>Email content and header metadata</li>
+      <li>Malicious ZIP attachment delivered via email</li>
+      <li>LNK artifact pointing to PowerShell execution</li>
+      <li>PowerShell script behavior and outbound network activity</li>
+    </ul>
+
+    <h2>Approach & Techniques Used</h2>
+    <ul>
+      <li><strong>Email & Header Analysis:</strong> validated the suspicious sender versus legitimate mail relay infrastructure and traced delivery paths.</li>
+      <li><strong>Attachment & Artifact Review:</strong> identified the ZIP payload and extracted key indicators from its contents.</li>
+      <li><strong>LNK & PowerShell Investigation:</strong> analyzed shortcut execution leading to PowerShell-based activity.</li>
+      <li><strong>Network & C2 Analysis:</strong> identified outbound POST requests and second-stage infrastructure contacted by the script.</li>
+    </ul>
+
+    <h2>Conclusion</h2>
+    <p>
+      This investigation highlights how a single phishing email can serve as the entry point for a multi-stage attack.
+      By combining email triage, artifact analysis, and PowerShell execution tracing, it becomes possible to reconstruct
+      the attacker’s activity and identify command-and-control infrastructure. This challenge reinforces the importance
+      of strong email analysis skills and disciplined investigation workflows in real-world incident response scenarios.
+    </p>
+
+  </main>
+
+</div>
+
+</body>
+</html>
