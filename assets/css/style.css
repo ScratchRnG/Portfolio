@@ -1109,3 +1109,37 @@ body.project-page .content {
   font-style: italic;
 }
 
+/* Image blocks for writeups */
+.image-block {
+  margin: 2rem 0;
+  text-align: center;
+}
+
+/* ===============================
+Image block
+================================ */
+
+.image-block img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Optional: cap very wide screenshots */
+.image-block img {
+  max-height: 600px;
+  object-fit: contain;
+}
+
+/* ===============================
+Section seperator for AS-REP
+================================ */
+
+.section-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #444, transparent);
+  margin: 2.5rem 0;
+}
