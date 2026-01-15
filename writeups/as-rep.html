@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: AS-REP Challenge | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Sherlock: AS-REP Challenge</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+      AS-REP Challenge<br>
+      A network security team received alerts from a Domain Controller (DC) indicating that a user was making unusual requests for Kerberos tickets, which is not typical for their role. Given that this behavior aligns with potential reconnaissance or lateral movement within the network, the security team escalated the issue to a senior investigator. The investigator has been tasked with analyzing the provided DC and workstation logs to trace the attacker's movements, determine the source of the anomaly, and understand how the attacker gained access and what actions they might have taken inside the network.r.
+    </p>
+
+    <hr class="section-divider">
+
+      To initialize the challenge, I began by reviewing the provided artifacts. The dataset was organized into two primary directories: DC and Corrado. The DC directory contained Domain Controller Security event logs, while the Corrado directory contained workstation Security event logs along with Prefetch artifacts.
+      To effectively analyze this data and build an accurate timeline, the first step was to convert both the event logs and Prefetch files into CSV format for ingestion into Timeline Explorer. This was accomplished using the following tools:
+    </p>
+
+    <pre><code>EvtxECmd.exe -f "C:\Users\LetsDefend\Desktop\ChallengeFile\AS-REP\[User]\logs\Security.evtx" --csv "C:\Users\LetsDefend\Desktop\ChallengeFile\AS-REP\Evtxoutputs\dc"
+PECmd.exe -d "C:\Users\LetsDefend\Desktop\ChallengeFile\AS-REP\corrado\prefetch" --csv "C:\Users\LetsDefend\Desktop\ChallengeFile\AS-REP\Evtxoutputs\corrado"</code></pre>
+
+    <p>
+      The -d flag in PECmd allows the tool to recursively process all Prefetch files within the specified directory, ensuring complete execution coverage for timeline analysis.
+    </p>
+
+    <!-- TASK 1 -->
+    <div class="task">
+      <h3>1️⃣ While reviewing the logs, Janice identified suspicious Kerberos ticket requests, potentially indicating an AS-REP attack. What is the exact time this attack occurred?</h3>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>2024-10-05 14:42:44</code></pre>
+
+      <p>
+        To obtain this answer, I immediately opened the Domain Controller Security logs in Timeline Explorer, as the goal was to analyze Kerberos TGT request activity. Based on prior Hack The Box experience, I knew exactly what indicators to look for.
+        In an AS-REP roasting attack, adversaries target user accounts that:
+      </p>
+
+      <ul>
+        <li>Allow weak encryption, enabling offline cracking of the TGT</li>
+        <li>Have Kerberos pre-authentication disabled</li>
+      </ul>
+
+      <p>
+        With this in mind, I filtered the DC security logs for Event ID 4768, which corresponds to Kerberos Authentication Service (AS) ticket requests.
+        Upon reviewing these events, I identified the following suspicious activity:
+      </p>
+
+      <ul>
+        <li>A TGT request for the user Corrado</li>
+        <li>Timestamped at 2024-10-05 14:42:44</li>
+        <li>Pre-authentication disabled</li>
+        <li>Weak encryption in use</li>
+      </ul>
+
+      <!-- [Insert Image #1] -->
+<figure class="image-block">
+  <img src="../assets/images/as-rep/1.png" alt="AS-REP Kerberos Event ID 4768">
+  <figcaption>AS-REP Kerberos TGT request showing RC4 encryption</figcaption>
+</figure>
+
+      <!-- [Insert Image #2] -->
+<figure class="image-block">
+  <img src="../assets/images/as-rep/2.png" alt="AS-REP Kerberos Event ID 4768">
+  <figcaption>AS-REP Kerberos TGT request showing RC4 encryption</figcaption>
+</figure>
+
+      <p>This combination of indicators strongly supports the presence of an AS-REP attack.</p>
+
+      <p>
+        Source (originating) IP: 192.168.110.129:60537<br>
+        Target account: Corrado | SOPRANOS.LOCAL<br>
+        Relevant event details:
+      </p>
+
+      <pre><code>Event ID: 4768
+TargetUserName: Corrado
+TargetDomainName: SOPRANOS.LOCAL
+PreAuthType: Logon without Pre-Authentication
+IpAddress: 192.168.110.129
+IpPort: 60537</code></pre>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- TASK 2 -->
+    <div class="task">
+      <h3>2️⃣ What user account did the attacker target during this Kerberos attack?</h3>
+
+      <p>This question was answered during the previous analysis.</p>
+      <p>The targeted user account was:</p>
+      <p><strong>Corrado</strong></p>
+      <p>This was clearly indicated in the Event ID 4768 Kerberos ticket request.</p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- TASK 3 -->
+    <div class="task">
+      <h3>3️⃣ What is the SID associated with the targeted user account?</h3>
+
+      <p>The Security Identifier (SID) for the targeted account was also obtained from the same Kerberos event.</p>
+
+      <p><strong>SID:</strong></p>
+      <pre><code>S-1-5-21-3079141193-1468241477-2901848075-1108</code></pre>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- TASK 4 -->
+    <div class="task">
+      <h3>4️⃣ What encryption algorithm was used in this Kerberos ticket request?</h3>
+
+      <p>This was again identified from the Event ID 4768 log.</p>
+      <p>The Kerberos ticket request used:</p>
+
+      <p><strong>RC4-HMAC</strong></p>
+
+      <p>This weak encryption algorithm is a key indicator of AS-REP roasting and was one of the primary reasons this event stood out during analysis.</p>
+
+      <!-- [Insert Image #3] -->
+<figure class="image-block">
+  <img src="../assets/images/as-rep/3-RC4.png" alt="AS-REP RC4 Encryption">
+  <figcaption>AS-REP Kerberos TGT request showing RC4 encryption</figcaption>
+</figure>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- TASK 5 -->
+    <div class="task">
+      <h3>5️⃣ What is the IP and port number that was used to request the ticket?</h3>
+
+      <p>
+        By analyzing the same Kerberos TGT request containing weak encryption and disabled pre-authentication, the source IP and port were identified as:
+      </p>
+
+      <p><strong>192.168.110.129:49684</strong></p>
+
+      <!-- [Insert Image #4] -->
+<figure class="image-block">
+  <img src="../assets/images/as-rep/4-IP.png" alt="AS-REP Source IP.">
+  <figcaption>AS-REP Kerberos TGT request showing Source IP Address</figcaption>
+</figure>
+
+      <p>
+        This represents the originating host that initiated the AS-REP ticket request.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- TASK 6 -->
+    <div class="task">
+      <h3>6️⃣ The attacker managed to crack the hash and used it to log into the compromised machine. When was their first successful logon?</h3>
+
+      <p>
+        To answer this question, I pivoted to Corrado’s workstation Security logs, as the attacker likely cracked the AS-REP hash and reused it to authenticate to the system.
+        I searched for logon events after the initial TGT request time:
+      </p>
+
+      <p><strong>Initial AS-REP attack:</strong> 2024-10-05 14:42:44</p>
+
+      <p>While reviewing the logs, I identified the following event:</p>
+
+      <pre><code>Event ID: 4624
+Time Created: 2024-10-05 14:48:58
+LogonType: 3 (Network)
+AuthenticationPackageName: NTLM
+Source IP: 192.168.110.129
+TargetUserName: NT AUTHORITY\ANONYMOUS LOGON</code></pre>
+
+      <!-- [Insert Image #5] -->
+<figure class="image-block">
+  <img src="../assets/images/as-rep/4-IP.png" alt="AS-REP Login after hash crack. Encryption">
+  <figcaption>AS-REP Compromised login.</figcaption>
+</figure>
+
+      <p>This event indicates a successful network logon originating from the same IP address that performed the AS-REP request.</p>
+
+      <p>
+        Timeline correlation:<br>
+        • AS-REP attack: 2024-10-05 14:42:44<br>
+        • Successful logon: 2024-10-05 14:48:58<br>
+        This sequence strongly supports offline hash cracking followed by credential reuse.
+      </p>
+
+      <p>So after successfully cracking the AS-REP hash, the attacker performed their first successful logon at: 2024-10-05 14:48:58</p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- TASK 7 -->
+    <div class="task">
+      <h3>7️⃣ Once inside, the attacker began exploring the system. What was the first command they executed?</h3>
+
+      <p><strong>Answer:</strong></p>
+      <pre><code>whoami.exe</code></pre>
+
+      <p>
+        To determine this, I analyzed the Prefetch files from Corrado’s workstation.
+        Since Prefetch records executable execution, I filtered for activity after the first successful logon (2024-10-05 14:48:58). Reviewing the timeline revealed the following sequence:
+      </p>
+
+      <pre><code>Time	Executable	Meaning
+14:57:19	CMD.EXE	Shell opened
+15:00:51	XYIWCCCL.EXE	Unknown binary (likely dropped)
+15:01:28	WHOAMI.EXE	Identity reconnaissance
+15:09:48	BITSADMIN.EXE	Download
+15:20:00	SHARPHOUND.EXE	Active Directory enumeration</code></pre>
+
+      <!-- [Insert Image #6 – WHOAMI execution] -->
+<figure class="image-block">
+  <img src="../assets/images/as-rep/6-whoami.png" alt="Command Executed. Encryption">
+  <figcaption>AS-REP Command Executed.</figcaption>
+</figure>
+      <p><strong>Important Note on Prefetch</strong><br>
+        A Prefetch file confirms that an executable was run, not what was typed interactively.
+        Prefetch tells us:
+      </p>
+
+      <ul>
+        <li>Which executables were launched</li>
+        <li>When they were executed</li>
+      </ul>
+
+      <p>It does not tell us:</p>
+      <ul>
+        <li>What was typed inside cmd.exe</li>
+        <li>What commands were inside a batch file</li>
+        <li>Which process spawned another process</li>
+      </ul>
+
+      <p><strong>Why whoami.exe matters</strong><br>
+        The execution of whoami.exe tells us:
+      </p>
+
+      <ul>
+        <li> It was explicitly executed by the attacker</li>
+        <li> It was user-driven, not OS-driven</li>
+        <li> It is a classic first reconnaissance command</li>
+        <li> It occurred after interactive access</li>
+        <li> It preceded any advanced attacker tooling</li>
+      </ul>
+
+      <p>
+        For these reasons, whoami.exe is correctly identified as the first command executed by the attacker.
+        Note: The wording of the question could be improved, as Prefetch does not directly capture typed commands, only executed binaries.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- TASK 8 -->
+    <div class="task">
+      <h3>8️⃣ When did the attacker execute this command exactly?</h3>
+
+      <p>
+        This was determined from the Prefetch runtime metadata associated with whoami.exe.
+        The execution timestamp can be observed directly in the Prefetch entry shown in Question 7.
+      </p>
+
+    </div>
+
+      <hr class="section-divider">
+
+<!-- LESSONS LEARNED -->
+<div class="task lessons-learned">
+  <h3> Lessons Learned</h3>
+
+  <p>
+    This incident demonstrates how weak Kerberos configurations like disabled pre-authentication and legacy encryption—can enable credential compromise through AS-REP roasting and lead to rapid lateral access. By correlating Domain Controller authentication events with endpoint logon activity, the attacker’s credential reuse and subsequent system access were clearly identified. Prefetch artifacts further revealed early post-compromise reconnaissance, reinforcing the value of endpoint telemetry in understanding attacker intent. Strong Kerberos hardening, continuous monitoring of abnormal TGT requests, and cross-source timeline correlation are critical to detecting and containing this type of attack early.
+  </p>
+</div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
