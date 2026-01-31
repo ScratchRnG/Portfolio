@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: Compromised | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Sherlock: Compromised</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+      Our SOC team detected suspicious activity in Network Traffic, the machine has been compromised and company information that should not have been there has now been stolen – it’s up to you to figure out what has happened and what data has been taken.
+    </p>
+
+    <p>
+      To get the challenge started, we are given a wireshark capture file (pcap), which will be utilized to answer the following tasks for this Sherlock.
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- TASK 1 -->
+    <div class="task">
+      <h3>Task 1</h3>
+
+      <p>
+        To determine the IP address used for initial access, I began by analyzing the provided PCAP file and focused on TCP traffic indicative of a successful connection. Specifically, I looked for the standard three-way handshake (<code>SYN</code>, <code>SYN-ACK</code>, <code>ACK</code>), which confirms that a session was successfully established.
+      </p>
+
+      <p>
+        During this analysis, I identified the following traffic:
+      </p>
+
+      <!-- Insert Image 1 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/1.png" alt="TCP three-way handshake">
+      </figure>
+
+      <p>
+        This shows an established TCP connection between the internal host <code>172.16.1.191</code> (source) and the external IP address <code>162.252.172.54</code> (destination).
+      </p>
+
+      <p>
+        Immediately after the handshake completed, the source host issued an HTTP <code>GET</code> request to the destination IP, indicating the initial access and potential payload retrieval activity:
+      </p>
+
+      <!-- Insert Image 2 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/2.png" alt="HTTP GET request">
+      </figure>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 2 -->
+    <div class="task">
+      <h3>Task 2</h3>
+
+      <p><strong>What is the SHA256 hash of the malware?</strong></p>
+
+      <p>
+        The SHA256 hash of the downloaded malware file we saw is::
+        <code>9b8ffdc8ba2b2caa485cca56a82b2dcbd251f65fb30bc88f0ac3da6704e4d3c6</code>
+      </p>
+
+      <p>
+        After identifying the suspicious HTTP download in the previous task, I navigated to <strong>File → Export Objects → HTTP</strong> in Wireshark to locate the transferred file. Once the object was identified, it was extracted and saved locally for analysis.
+      </p>
+
+      <p>
+        A file type check was then performed on the extracted object, which confirmed it to be a <strong>PE32 executable (DLL)</strong>, indicating a Windows-based malicious payload, as shown in the image below:
+      </p>
+
+      <!-- Insert Image 3 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/3.png" alt="PE32 executable DLL">
+      </figure>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 3 -->
+    <div class="task">
+      <h3>Task 3</h3>
+
+      <p><strong>What is the Family label of the malware?</strong></p>
+
+      <p>
+        To identify the malware family, I submitted the previously extracted file’s SHA256 hash to <strong>VirusTotal</strong> for analysis. Based on the detection results, the malware was classified as belonging to the <strong>Pikabot</strong> family.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 4 -->
+    <div class="task">
+      <h3>Task 4</h3>
+
+      <p><strong>When was the malware first seen in the wild (UTC)?</strong></p>
+
+      <p>
+        The malware was first observed in the wild on <strong>2023-05-19 at 14:01:21 (UTC)</strong>. This information was obtained from <strong>VirusTotal</strong>, where the timestamp is listed under the <strong>Details</strong> tab for the submitted SHA256 hash.
+      </p>
+
+      <!-- Insert Image 4 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/4.png" alt="VirusTotal first seen timestamp">
+      </figure>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 5 -->
+    <div class="task">
+      <h3>Task 5</h3>
+
+      <p><strong>The malware used HTTPS traffic with a self-signed certificate. What are the ports, from smallest to largest?</strong></p>
+
+      <p>
+        To identify the ports used by the malware for encrypted communication, I analyzed the PCAP for TLS traffic, as HTTPS traffic is encrypted and encapsulated within TLS. I applied the following display filter in Wireshark to isolate relevant traffic originating from the compromised host:
+      </p>
+
+      <pre><code>tls && ip.src == 172.16.1.191</code></pre>
+
+      <p>
+        This filter restricted the results to TLS sessions initiated by the host involved in the malware download, allowing for focused analysis.
+      </p>
+
+      <p>
+        After reviewing the TLS handshake packets and examining the associated destination ports, I identified the ports used by the malware for HTTPS communication. The observed ports, listed from smallest to largest, are:
+      </p>
+
+      <pre><code>2078, 2222, 32999</code></pre>
+
+      <!-- Insert Image 5 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/5.png" alt="TLS destination ports">
+      </figure>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 6 -->
+    <div class="task">
+      <h3>Task 6</h3>
+
+      <p><strong>What is the id-at-localityName of the self-signed certificate associated with the first malicious IP?</strong></p>
+
+      <p>
+        The <code>id-at-localityName</code> value of the self-signed certificate associated with the first malicious IP is:
+      </p>
+
+      <pre><code>Pyopneumopericardium</code></pre>
+
+      <p>
+        This value was identified by inspecting the TLS handshake for the initial malicious connection. Specifically, I analyzed the <strong>Certificate</strong> message within the <code>Certificate, Server Key Exchange, Server Hello Done</code> packet and reviewed the subject fields of the self-signed certificate, this is where the <code>id-at-localityName</code> attribute is displayed.
+      </p>
+
+      <!-- Insert Image 6 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/6.png" alt="Certificate locality name">
+      </figure>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 7 -->
+    <div class="task">
+      <h3>Task 7</h3>
+
+      <p><strong>What is the notBefore time(UTC) for this self-signed certificate?</strong></p>
+
+      <p>
+        The <code>notBefore</code> timestamp for the self-signed certificate is:
+      </p>
+
+      <pre><code>2023-05-14 08:36:52</code></pre>
+
+      <p>
+        The <code>notBefore</code> field is an <strong>X.509 certificate validity attribute</strong> that indicates the date and time from which the certificate is considered valid. Each certificate defines a validity window consisting of a <code>notBefore</code> (start of validity) and a <code>notAfter</code> (expiration) value.
+      </p>
+
+      <p>
+        This timestamp was identified by analyzing the TLS handshake packet labeled
+        <strong><code>TLSv1.2 – Certificate, Server Key Exchange, Server Hello Done</code></strong>, which represents a server-to-client TLS exchange containing the certificate and its associated metadata.
+      </p>
+
+      <!-- Insert Image 7 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/7.png" alt="Certificate notBefore field">
+      </figure>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 8 -->
+    <div class="task">
+      <h3>Task 8</h3>
+
+      <p><strong>What was the domain used for tunneling?</strong></p>
+
+      <p>
+        To identify the domain used for tunneling, I analyzed DNS traffic associated with the compromised host by applying the following Wireshark display filter:
+      </p>
+
+      <pre><code>dns && ip.addr == 172.16.1.191</code></pre>
+
+      <p>
+        This filter isolated DNS queries originating from or destined to the infected system. Upon reviewing the results, I observed repeated DNS queries containing long, irregular subdomains resolving to the same parent domain, which is behavior consistent with DNS tunneling activity.
+      </p>
+
+      <p>
+        The domain identified as being used for tunneling was:
+      </p>
+
+      <pre><code>steasteel.net</code></pre>
+
+      <p>
+        This domain is also a known indicator of compromise (IOC) referenced in publicly available threat intelligence related to similar malware activity.
+      </p>
+
+      <!-- Insert Image 8 -->
+      <figure class="image-block">
+        <img src="../assets/images/compromised/8.png" alt="DNS tunneling domain">
+      </figure>
+    </div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
