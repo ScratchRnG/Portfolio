@@ -20,85 +20,131 @@
   <!-- Main Content -->
   <main class="argus-content">
 
-    <h2>1.</h2>
-    <p>
-      The SOC Team suspects that an adversary is lurking in their environment and are using PsExec to move laterally.
-      A junior SOC Analyst specifically reported the usage of PsExec on a WorkStation.
-      How many times was PsExec executed by the attacker on the system?
-    </p>
+<h2>1.</h2>
 
-    <p><strong>Answer == 9</strong></p>
+<h3>Question</h3>
+<p>
+  The SOC Team suspects that an adversary is lurking in their environment and are using PsExec to move laterally.
+  A junior SOC Analyst specifically reported the usage of PsExec on a WorkStation.
+  How many times was PsExec executed by the attacker on the system?
+</p>
 
-    <p>
-      I found this by analyzing eventcode 7045! A quick google search gave me the following:
-    </p>
+<h3>Answer</h3>
+<p><strong>9</strong></p>
 
-    <p>
-      "The most direct method involves analyzing Event ID 7045 in the System log, which records the installation of a new service.
-      PsExec creates a service named PSEXESVC by default on the target system during execution,
-      and each instance generates a new Event ID 7045 entry"
-    </p>
+<h3>Explanation</h3>
+<p>
+  To determine how many times PsExec was executed, I analyzed <strong>Event ID 7045</strong> within the
+  <strong>System</strong> event log.
+</p>
 
-    <p>
-      Once i filtered for that eventcode, I got 9 instances of PsExec.
-    </p>
+<p>
+  Event ID 7045 is generated whenever a new service is installed on a Windows system.
+  PsExec creates a service named <code>PSEXESVC</code> on the target machine each time it is executed.
+  As a result, every PsExec execution produces a corresponding Event ID 7045 entry.
+</p>
 
-    <pre><code>Computer == Forela-Wkstn002.forela.local</code></pre>
+<p>
+  After filtering the logs for Event ID 7045 and identifying instances related to the
+  <code>PSEXESVC</code> service, I observed a total of <strong>9 occurrences</strong>,
+  confirming that PsExec was executed nine times by the attacker.
+</p>
 
-    <hr>
+<pre><code>Computer == Forela-Wkstn002.forela.local</code></pre>
 
-    <h2>2.</h2>
-    <p>
-      What is the name of the service binary dropped by PsExec tool allowing attacker to execute remote commands?
-    </p>
+<hr>
 
-    <p><strong>Answer == psexesvc.exe</strong></p>
+<h2>2.</h2>
 
-    <p>
-      In the same logs I found the previous answer, we see the service.
-    </p>
+<h3>Question</h3>
+<p>
+  What is the name of the service binary dropped by PsExec tool allowing attacker to execute remote commands?
+</p>
 
-    <pre><code>Executable Info = %SystemRoot%\PSEXESVC.exe</code></pre>
+<h3>Answer</h3>
+<p><strong>psexesvc.exe</strong></p>
 
-    <hr>
+<h3>Explanation</h3>
+<p>
+  While reviewing the same <strong>Event ID 7045</strong> entries used in the previous question,
+  I identified the service created by PsExec during execution.
+</p>
 
-    <h2>3.</h2>
-    <p>
-      Now we have confirmed that PsExec ran multiple times, we are particularly interested in the 5th Last instance of the PsExec.
-      What is the timestamp when the PsExec Service binary ran?
-    </p>
+<p>
+  PsExec installs a temporary service on the target system in order to execute commands remotely.
+  The service binary associated with this activity is <code>PSEXESVC.exe</code>,
+  which is written to the Windows system directory.
+</p>
 
-    <p><strong>Answer == 07/09/2023 12:06:54</strong></p>
+<pre><code>Executable Info = %SystemRoot%\PSEXESVC.exe</code></pre>
 
-    <p>
-      i just looked at the 5th to last psexec activity out of the 9 returned in the previous question..
-    </p>
+<hr>
 
-    <hr>
+<h2>3.</h2>
 
-    <h2>4.</h2>
-    <p>
-      Can you confirm the hostname of the workstation from which attacker moved laterally?
-    </p>
+<h3>Question</h3>
+<p>
+  Now we have confirmed that PsExec ran multiple times, we are particularly interested in the 5th Last instance of the PsExec.
+  What is the timestamp when the PsExec Service binary ran?
+</p>
 
-    <p><strong>Answer == Forela-Wkstn001</strong></p>
+<h3>Answer</h3>
+<p><strong>07/09/2023 12:06:54</strong></p>
 
-    <p>
-      For this one, i had to look for the device in which the attacker executed PsExec from.
-      In the previous questions, those logs were logged from the compromised machine in which the attacker moved to.
-      for example, question one was tied to the host the attacker moved to.
-    </p>
+<h3>Explanation</h3>
+<p>
+  To answer this question, I reviewed the <strong>Event ID 7045</strong> entries associated with
+  the PsExec service (<code>PSEXESVC</code>) identified in the previous questions.
+</p>
 
-    <p>
-      To find the original compromised host, i looked for event code 4624's to see what log ons took place.
-      I looked for events around: 07/09/2023 12:06:54.
-    </p>
+<p>
+  A total of <strong>9 PsExec executions</strong> were observed. By ordering these events
+  chronologically and selecting the <strong>5th most recent</strong> occurrence,
+  I identified the timestamp corresponding to that specific PsExec execution.
+</p>
 
-    <p>
-      I eventually found this:
-    </p>
+<p>
+  The 5th last PsExec service execution occurred at:
+</p>
 
-    <pre><code>Computer
+<p><strong>07/09/2023 12:06:54</strong></p>
+
+<hr>
+
+<h2>4.</h2>
+
+<h3>Question</h3>
+<p>
+  Can you confirm the hostname of the workstation from which attacker moved laterally?
+</p>
+
+<h3>Answer</h3>
+<p><strong>Forela-Wkstn001</strong></p>
+
+<h3>Explanation</h3>
+<p>
+  To answer this question, I needed to identify the workstation from which the attacker
+  originally executed PsExec. In the previous questions, the analyzed logs were tied to
+  the destination host that the attacker moved <em>to</em>, not the host they moved <em>from</em>.
+</p>
+
+<p>
+  For example, Question 1 focused on PsExec activity observed on
+  <code>Forela-Wkstn002</code>, which represents the system that was laterally accessed.
+</p>
+
+<h4>Log Analysis</h4>
+<p>
+  To identify the source workstation, I analyzed <strong>Event ID 4624</strong> (successful logon)
+  events around the timestamp identified in the previous question:
+  <strong>07/09/2023 12:06:54</strong>.
+</p>
+
+<p>
+  During this review, I identified the following logon event:
+</p>
+
+<pre><code>Computer
 Forela-Wkstn002.forela.local
 Map Description
 Successful logon
@@ -109,14 +155,15 @@ Target: FORELA.LOCAL\alonzo.spire
 Payload Data2
 LogonType 3</code></pre>
 
-    <p>at the exact time of the previous question. Moving down the event i found this:</p>
+<p>
+  At the same timestamp, further inspection of the event revealed the originating host:
+</p>
 
-    <pre><code>Remote Host
+<pre><code>Remote Host
 FORELA-WKSTN001 (172.17.79.129)</code></pre>
 
-    <p>MORE INFO:</p>
-
-    <pre><code>Time:        2023-09-07 12:08:54
+<h4>Additional Context</h4>
+<pre><code>Time:        2023-09-07 12:08:54
 Event ID:    4624
 LogonType:   3 (Network)
 User:        FORELA\Administrator
@@ -125,52 +172,109 @@ Workstation: FORELA-WKSTN001
 IP Address:  172.17.79.129
 Computer:    Forela-Wkstn002.forela.local</code></pre>
 
-    <p>What this tells us:</p>
+<h4>Conclusion</h4>
+<p>
+  Based on this evidence, we can determine the following:
+</p>
 
-    <ul>
-      <li>The attacker authenticated to Forela-Wkstn002</li>
-      <li>Used Administrator credentials</li>
-      <li>Over the network (Logon Type 3)</li>
-      <li>From workstation: FORELA-WKSTN001</li>
-      <li>Using NTLM (very common with PsExec)</li>
-    </ul>
+<ul>
+  <li>The attacker authenticated to <code>Forela-Wkstn002</code></li>
+  <li>Administrator credentials were used</li>
+  <li>The authentication occurred over the network (Logon Type 3)</li>
+  <li>The source workstation was <strong>FORELA-WKSTN001</strong></li>
+  <li>NTLM authentication was used, which is commonly observed with PsExec activity</li>
+</ul>
 
-    <hr>
+<hr>
 
-    <h2>What is full name of the Key File dropped by 5th last instance of the Psexec?</h2>
+<h2>5.</h2>
 
-    <p><strong>ANswer == PSEXEC-FORELA-WKSTN001-95F03CFE.key</strong></p>
+<h3>Question</h3>
+<p>
+  What is full name of the Key File dropped by 5th last instance of the Psexec?
+</p>
 
-    <p>
-      For this one, I simply looked up instanced of ".key" and found a key being generated
-      one second after psexec was launched.
-    </p>
+<h3>Answer</h3>
+<p><strong>PSEXEC-FORELA-WKSTN001-95F03CFE.key</strong></p>
 
-    <p>
-      But a key note to takeaway is that eventcode 11 is generated for this kind of event.
-    </p>
+<h3>Explanation</h3>
+<p>
+  To identify the key file created by the 5th last PsExec execution, I searched for file
+  creation events involving files with the <code>.key</code> extension around the previously
+  identified timestamp.
+</p>
 
-    <hr>
+<p>
+  Shortly after the PsExec service was launched, a key file was generated,
+  indicating PsExec’s use of a temporary encryption key during execution.
+</p>
 
-    <h2>Can you confirm the timestamp when this key file was created on disk?</h2>
+<p>
+  It is important to note that this activity is recorded under
+  <strong>Event ID 11</strong>, which corresponds to file creation events.
+</p>
 
-    <p>
-      I simply looked at the timestamp associated with the logs we found for the previous question.
-    </p>
+<hr>
 
-    <hr>
+<h2>6.</h2>
 
-    <h2>
-      What is the full name of the Named Pipe ending with the "stderr" keyword for the
-      5th last instance of the PsExec?
-    </h2>
+<h3>Question</h3>
+<p>
+  Can you confirm the timestamp when this key file was created on disk?
+</p>
 
-    <pre><code>\PSEXESVC-FORELA-WKSTN001-3056-stderr</code></pre>
+<h3>Answer</h3>
+<p><strong>07/09/2023 12:06:55</strong></p>
 
-    <p>
-      For this one, i simply looked at eventcode 17 which looks for named pipe creations.
-      I looked at the time stamp around 2023-09-07 12:06:55 and saw the named pipe value.
-    </p>
+<h3>Explanation</h3>
+<p>
+  To determine when the key file was created, I reviewed the file creation
+  events identified in the previous question.
+</p>
+
+<p>
+  The timestamp associated with the <strong>Event ID 11</strong> entry for the
+  <code>.key</code> file indicates when it was written to disk.
+</p>
+
+<p>
+  Based on this event, the key file was created at:
+</p>
+
+<p><strong>07/09/2023 12:06:55</strong></p>
+
+<hr>
+
+<h2>7.</h2>
+
+<h3>Question</h3>
+<p>
+  What is the full name of the Named Pipe ending with the "stderr" keyword for the
+  5th last instance of the PsExec?
+</p>
+
+<h3>Answer</h3>
+<pre><code>\PSEXESVC-FORELA-WKSTN001-3056-stderr</code></pre>
+
+<h3>Explanation</h3>
+<p>
+  To identify the named pipe associated with the 5th last PsExec execution,
+  I analyzed <strong>Event ID 17</strong>, which records named pipe creation activity.
+</p>
+
+<p>
+  I focused on events occurring around the previously identified timestamp:
+  <strong>2023-09-07 12:06:55</strong>.
+</p>
+
+<p>
+  Within this time window, the named pipe value ending with the
+  <code>stderr</code> keyword was observed, confirming the pipe created
+  during that specific PsExec execution.
+</p>
+
+<hr>
+
 
   </main>
 
