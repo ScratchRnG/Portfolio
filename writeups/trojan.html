@@ -50,6 +50,13 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
     <p><strong>Answer:</strong></p>
     <pre><code>19041</code></pre>
 
+  <p>
+
+The answer can be found directly beside the row labeled Major/Minor, where the value is set to 15.19041.
+
+    </p>
+
+
     <hr>
 
     <h2>What is the computer hostname?</h2>
@@ -63,7 +70,7 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
     </p>
 
     <p>
-      Within there, we get this result:
+      Within there, we get the following result:
     </p>
 
     <pre><code>0x8a0d9148a000  \REGISTRY\MACHINE\SYSTEM        Disabled</code></pre>
@@ -82,10 +89,11 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
     <h2>What is the name of the downloaded ZIP file?</h2>
 
     <p>
-      For this, I utilized FTK imager along with the .ds1 file provided.
-      Once in, there was only ONE user named john.
-      I simply navigated to his downloads as found what I needed.
-    </p>
+  For this step, I used FTK Imager to analyze the provided <code>.ds1</code> file.
+  Upon loading the image, I identified a single user account named <strong>john</strong>.
+  I then navigated to his Downloads directory, where I located the required artifact.
+</p>
+
 
     <pre><code>Data_Recovery.zip</code></pre>
 
@@ -110,8 +118,8 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
 
     <p>
       Instead of reading through all the packets, I navigated to export objects,
-      and selected HTTP. Once in there, i got a clean view of file downloads,
-      urls, and domains. Here i found Data_Recovery.zip
+      and selected HTTP. Once there, i aquired a clean view of file downloads,
+      urls, and domains. It was here where I also identified Data_Recovery.zip
     </p>
 
     <hr>
@@ -124,8 +132,8 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
     </p>
 
     <p>
-      Now knowing the exe, I went to volatility and analyzed all processes running,
-      which led me to:
+      Now knowing the exe, I pivoted to volatility and analyzed all processes running,
+      which led me to find the application running with the associated pid:
     </p>
 
     <pre><code>484</code></pre>
@@ -145,18 +153,24 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
     <p>
       To get this, I went to FTK imager, extracted the hashes by right clicking the exe.
       Unfortunately, it only gave me MD5 and SHA256.
-      But i took the MD5 value, threw it to VT, and got the SHA256 in the details pane of VT.
+      But I took the MD5 value, threw it to VT, and got the SHA256 in the details pane of VT.
     </p>
 
     <hr>
 
-    <h2>When was the malicious program first executed?</h2>
+<h2>When was the malicious program first executed?</h2>
 
-    <pre><code>2023-05-30 02:06:29</code></pre>
+<pre><code>2023-05-30 02:06:29</code></pre>
 
-    <pre><code>vol.py -f "C:\Users\B1gB1\Downloads\memory capture\memory.vmem" windows.registry.amcache.Amcache</code></pre>
+<pre><code>vol.py -f "C:\Users\B1gB1\Downloads\memory capture\memory.vmem" windows.registry.amcache.Amcache</code></pre>
 
-    <p>amcache allows us to see when a program was executed.</p>
+<p>
+  To obtain this timestamp, I used Volatility’s <strong>Amcache</strong> plugin.
+  The Amcache registry artifact records execution metadata for programs,
+  including whether and when an application was run.
+  By analyzing the Amcache output with the command above, I was able to
+  identify the first execution time of the malicious program.
+</p>
 
     <hr>
 
@@ -165,16 +179,12 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
     <pre><code>2</code></pre>
 
     <p>
-      we see it twice in amcache.
+      We see the artifact in question execute twice with the previous questions command.
     </p>
 
     <hr>
 
     <h2>The malicious application references two .TMP files, one is IS-NJBAT.TMP, which is the other?</h2>
-
-    <p>
-      I left off where i was going to extract the prefetch of recovery from ftk.
-    </p>
 
     <pre><code>.\PECmd.exe -f C:\Users\B1gB1\Desktop\RECOVERY_SETUP.EXE-A808CDAB.pf</code></pre>
 
@@ -182,23 +192,28 @@ PE TimeDateStamp        Wed Jan  4 04:27:11 1995</code></pre>
 
     <hr>
 
-    <h2>How many of the URLs contacted by the malicious application were detected as malicious by VirusTotal?</h2>
+<h2>How many of the URLs contacted by the malicious application were detected as malicious by VirusTotal?</h2>
 
-    <p>
-      In virus total, I navigated to relations where i found multiple IPs:
-      all of the http://45.12.253.... were present in the Wireshark export HTTP objects.
-    </p>
+<p>
+  In VirusTotal, I reviewed the <strong>Relations</strong> section of the analyzed artifact,
+  where multiple associated IP addresses were identified.
+  Several URLs beginning with <code>http://45.12.253.*</code> were flagged as malicious.
+  These same URLs were also observed in the Wireshark HTTP object export,
+  confirming that the malicious application successfully contacted them.
+</p>
 
     <hr>
 
-    <h2>The malicious application downloaded a binary file from one of the C2 URLs, what is the name of the file?</h2>
+<h2>The malicious application downloaded a binary file from one of the C2 URLs. What is the name of the file?</h2>
 
-    <pre><code>puk.php</code></pre>
+<pre><code>puk.php</code></pre>
 
-    <p>
-      For this one, all i did was analyze wireshark and the export objects once again.
-      One of the files downloaded from the URLs seen in the previous question was puk.php.
-    </p>
+<p>
+  To identify the downloaded file, I analyzed the network traffic in Wireshark and reviewed the exported HTTP objects.
+  Among the files retrieved from the previously identified C2 URLs, one binary download was observed with the filename
+  <code>puk.php</code>.
+</p>
+
 
   </main>
 
