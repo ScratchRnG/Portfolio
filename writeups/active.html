@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HTB Active — Red Team Lab Write-up</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>HTB Active — Red Team Lab</h1>
+    <a class="back-link" href="../index.html">← Back to Write-ups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+      <strong>Active</strong> is a classic Windows Active Directory lab that demonstrates how a seemingly
+      low-privileged domain user can escalate to full domain compromise through
+      misconfigurations commonly found in real-world enterprise environments.
+    </p>
+    <p>
+      The objective of this lab was to identify exposed domain resources, extract sensitive
+      configuration data, and leverage authentication weaknesses to ultimately gain
+      administrative control over the domain.
+    </p>
+
+    <h2>YouTube Walkthrough</h2>
+    <p>
+      <a class="nav-btn active" href="PASTE_Video_Link here oece ready" target="_blank" rel="noopener noreferrer">
+        ▶ Watch the Full Red Team Walkthrough
+      </a>
+    </p>
+
+    <h2>High-Level Attack Flow</h2>
+    <ul>
+      <li>External enumeration revealed a Windows domain controller exposing common AD services.</li>
+      <li>Unauthenticated access to a domain replication share exposed Group Policy data.</li>
+      <li>Credentials were recovered from a misconfigured Group Policy Preferences file.</li>
+      <li>Recovered domain credentials enabled deeper enumeration of Active Directory.</li>
+      <li>Kerberos service ticket abuse led to privilege escalation.</li>
+      <li>Administrative access to the domain was achieved.</li>
+    </ul>
+
+    <h2>Key Vulnerabilities & Misconfigurations</h2>
+    <ul>
+      <li>
+        <strong>Exposed GPP Credentials:</strong>
+        Group Policy Preferences stored encrypted passwords using a static, publicly known AES key,
+        allowing instant decryption.
+      </li>
+      <li>
+        <strong>Over-Permissioned Domain Shares:</strong>
+        Sensitive replication data was accessible to unauthenticated users.
+      </li>
+      <li>
+        <strong>Kerberoastable Privileged Account:</strong>
+        A highly privileged account had an SPN registered, allowing ticket extraction and offline cracking.
+      </li>
+      <li>
+        <strong>Weak Password Hygiene:</strong>
+        Service and administrative accounts relied on predictable or weak passwords.
+      </li>
+    </ul>
+
+    <h2>Why This Lab Matters</h2>
+    <p>
+      This scenario highlights how legacy configurations and overlooked defaults can completely
+      undermine an Active Directory environment, even when modern authentication mechanisms
+      like Kerberos are in place.
+    </p>
+    <p>
+      No exploits, malware, or zero-days were required. Every step relied on:
+    </p>
+    <ul>
+      <li>Valid authentication behavior</li>
+      <li>Misconfigurations</li>
+      <li>Weak operational security decisions</li>
+    </ul>
+
+    <h2>Lessons Learned</h2>
+    <ul>
+      <li>
+        <strong>Never store credentials in Group Policy Preferences.</strong>
+        Even years after deprecation, GPP remains a common attack vector.
+      </li>
+      <li>
+        <strong>Audit SMB and SYSVOL access regularly.</strong>
+        Read access alone can be enough to compromise a domain.
+      </li>
+      <li>
+        <strong>Monitor Kerberos service ticket requests.</strong>
+        Excessive or unusual TGS requests are a strong indicator of Kerberoasting.
+      </li>
+      <li>
+        <strong>Service account hygiene is critical.</strong>
+        Privileged accounts should never have weak or static passwords.
+      </li>
+    </ul>
+
+    <h2>Defensive Takeaways</h2>
+    <ul>
+      <li>Remove legacy Group Policy Preference configurations.</li>
+      <li>Rotate service account passwords and use managed service accounts where possible.</li>
+      <li>Enable detection for abnormal Kerberos ticket activity.</li>
+    </ul>
+
+    <h2>Conclusion</h2>
+    <p>
+      The <strong>Active</strong> lab serves as a powerful reminder that
+      Active Directory security failures are often the result of configuration drift and
+      operational shortcuts rather than advanced attacker tooling.
+    </p>
+    <p>
+      This exercise reinforced the importance of understanding how attackers chain together
+      small weaknesses to achieve full domain compromise and how defenders can prevent
+      these attacks by enforcing basic security hygiene.
+    </p>
+
+  </main>
+
+</div>
+
+</body>
+</html>

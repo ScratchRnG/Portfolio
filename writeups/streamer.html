@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HTB Streamer — Sherlock DFIR Write-up</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>HTB Sherlock — Streamer</h1>
+    <a class="back-link" href="../index.html">← Back to Write-ups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+      <strong>Streamer</strong> is a digital forensics focused Sherlock scenario that simulates a
+      real-world malware infection resulting from malicious advertising (malvertising).
+      A developer unknowingly downloads a trojanized installer for a popular streaming
+      application, leading to full endpoint compromise, persistence, and attempted data
+      exfiltration.
+    </p>
+
+    <p>
+      This investigation centers on host-based forensic artifacts rather than traditional
+      network PCAP analysis, emphasizing timeline reconstruction, execution tracking,
+      persistence discovery, and analyst attribution.
+    </p>
+
+    <h2>Sherlock Scenario</h2>
+    <p>
+      Simon Stark, a developer at Forela, planned to stream coding sessions with colleagues.
+      While searching online for streaming software, he downloaded a malicious installer
+      promoted through Google Ads, believing it to be legitimate software.
+    </p>
+
+    <p>
+      The attacker leveraged a trojanized ZIP archive containing both legitimate software
+      and a malicious backdoor, ensuring the compromise remained unnoticed while establishing
+      persistence and attempting data exfiltration.
+    </p>
+
+    <p>
+      The investigation begins by parsing core forensic artifacts including the
+      <strong>MFT</strong>, <strong>USN Journal</strong>, and <strong>Prefetch</strong> files.
+    </p>
+
+    <h2>Video Walkthrough</h2>
+    <p>
+      This Sherlock is documented as a full video walkthrough rather than a traditional
+      step-by-step write-up.
+    </p>
+
+    <p>
+      <a class="nav-btn active" href="PUT VIDEO HERE ONCE REAST" target="_blank" rel="noopener noreferrer">
+        ▶ Watch the Full DFIR Walkthrough
+      </a>
+    </p>
+
+    <h2>High-Level Investigation Flow</h2>
+    <ul>
+      <li>Identified a suspicious ZIP download using MFT and Zone.Identifier analysis.</li>
+      <li>Confirmed file renaming activity using the USN Journal.</li>
+      <li>Recovered the malicious download URL and hosting IP address.</li>
+      <li>Correlated firewall and DNS logs to determine network communication.</li>
+      <li>Identified the malicious installer hash using Amcache.</li>
+      <li>Discovered a randomly named backdoor executable dropped post-installation.</li>
+      <li>Confirmed execution using Prefetch artifacts.</li>
+      <li>Identified persistence via a stealthy scheduled task masquerading as a Windows component.</li>
+      <li>Observed attempted command-and-control and S3 exfiltration activity.</li>
+      <li>Attributed forensic triage activity to the responding analyst using ShellBags.</li>
+    </ul>
+
+    <h2>Key Artifacts & Evidence Sources</h2>
+    <ul>
+      <li><strong>MFT:</strong> File creation, download paths, and post-compromise file drops.</li>
+      <li><strong>USN Journal:</strong> File rename and modification timestamps.</li>
+      <li><strong>Zone.Identifier:</strong> Web-origin verification of downloaded content.</li>
+      <li><strong>Amcache:</strong> Executable metadata and cryptographic hash recovery.</li>
+      <li><strong>Prefetch:</strong> Confirmation of malware execution.</li>
+      <li><strong>DNS Client Logs (Event ID 3008):</strong> Malicious domain resolution attempts.</li>
+      <li><strong>Task Scheduler Logs (Event ID 4698):</strong> Persistence mechanism discovery.</li>
+      <li><strong>ShellBags:</strong> Analyst activity attribution and triage confirmation.</li>
+    </ul>
+
+    <h2>Why This Sherlock Matters</h2>
+    <p>
+      <strong>Streamer</strong> accurately reflects modern attack chains that rely on
+      social engineering and malvertising rather than exploits.
+      No vulnerabilities were required, only user trust and a convincing download.
+    </p>
+
+    <p>
+      The challenge highlights how attackers blend malicious activity with legitimate
+      software, abuse Windows persistence mechanisms, and leverage cloud services
+      such as S3 for data exfiltration.
+    </p>
+
+    <h2>Lessons Learned</h2>
+    <ul>
+      <li>
+        <strong>Malvertising remains highly effective.</strong>
+        Users often trust top search results without validating domains.
+      </li>
+      <li>
+        <strong>Persistence often hides in plain sight.</strong>
+        Naming conventions like <em>COMSurrogate</em> are designed to evade casual inspection.
+      </li>
+      <li>
+        <strong>DNS telemetry is critical.</strong>
+        Failed and bogus lookups often reveal malware activity even when network logs are sparse.
+      </li>
+    </ul>
+
+    <h2>Defensive Takeaways</h2>
+    <ul>
+      <li>Educate users on verifying software sources and sponsored search results.</li>
+      <li>Monitor scheduled task creation events for suspicious or misleading names.</li>
+      <li>Log and alert on abnormal DNS queries and failed domain resolutions.</li>
+    </ul>
+
+    <h2>Conclusion</h2>
+    <p>
+      <strong>Streamer</strong> is an excellent demonstration of how modern endpoint
+      compromises unfold quietly through trusted channels.
+      The investigation reinforces the importance of host-based forensic artifacts
+      when traditional network evidence is limited or unavailable.
+    </p>
+
+    <p>
+      This Sherlock strongly emphasizes timeline correlation, artifact familiarity,
+      and analyst intuition which are all essential skills for real-world DFIR operations.
+    </p>
+
+  </main>
+
+</div>
+
+</body>
+</html>
