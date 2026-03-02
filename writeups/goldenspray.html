@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: GoldenSpray | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Keep same theme CSS as your AS-REP writeup -->
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Sherlock: GoldenSpray</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Scenario</h2>
+    <p>
+      As a cybersecurity analyst at SecureTech Industries, you've been alerted to unusual login attempts and unauthorized access within the company's network. Initial indicators suggest a potential brute-force attack on user accounts. Your mission is to analyze the provided log data to trace the attack's progression, determine the scope of the breach, and the attacker's TTPs.
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- QUESTION 1 -->
+    <div class="task">
+      <h3>Question 1:</h3>
+      <p><strong>What is the attacker's IP address?</strong></p>
+
+      <p>
+        To identify the attacker’s IP address, I began by analyzing failed authentication attempts. In Windows environments, failed logons are recorded under <strong>Event ID 4625</strong> within the Security log.
+      </p>
+
+      <p>
+        Since the dataset consists of <strong>Winlogbeat logs</strong>, the traditional <code>EventCode=4625</code> filter does not apply. Instead, the correct field to query is <code>event.code</code>. Additionally, because authentication events reside in the Security log, I specified the appropriate channel.
+      </p>
+
+      <p><strong>The query used was:</strong></p>
+      <pre><code>index=goldenspray winlog.channel=Security event.code=4625</code></pre>
+
+      <!-- [insertimage1] -->
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/1.png" alt="insertimage1">
+        <figcaption>Structure</figcaption>
+      </figure>
+
+      <p>
+        From reviewing the event structure, it is clear that the event ID is stored under the <code>event.code</code> field rather than <code>EventCode</code>, which explains why the standard Windows filter would not return results in this dataset.
+      </p>
+
+      <p>To determine the source of the malicious activity, I aggregated failed logon attempts by source IP address:</p>
+
+      <pre><code>index=goldenspray winlog.channel=Security event.code=4625
+| stats count by winlog.event_data.IpAddress
+| sort - count</code></pre>
+
+      <p>
+        This query counts the number of failed authentication attempts per IP address and sorts them in descending order, allowing us to identify the most aggressive source.
+      </p>
+
+      <p>
+        The results show that the IP address of 77.97.78.115 has the highest number of failed logon attempts.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/2.png" alt="Insert image 2">
+        <figcaption>Malicious IP</figcaption>
+      </figure>
+
+      <p>
+        Given the volume of authentication failures originating from this address, it is highly indicative of brute-force or password spraying activity. Therefore, <strong>77.91.78.115 is identified as the attacker’s IP address.</strong>
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 2 -->
+    <div class="task">
+      <h3>Question 2:</h3>
+      <p><strong>What country is the attack originating from?</strong></p>
+
+      <p>
+        After identifying the attacker’s IP address as <strong>77.91.78.115</strong>, the next step was to determine the geographic origin of the activity.
+      </p>
+
+      <p>
+        To accomplish this, I performed an IP geolocation lookup using a reputable IP intelligence service.
+      </p>
+
+      <p>
+        Upon submitting the IP address <strong>77.91.78.115</strong>, the lookup results indicated that the address is registered in: <strong>Finland</strong>
+      </p>
+
+      <p>
+        This suggests that the malicious authentication attempts originated from an IP address geolocated to Finland.
+      </p>
+
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/3.png" alt="Question 2 image">
+        <figcaption>IP2Location</figcaption>
+      </figure>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 3 -->
+    <div class="task">
+      <h3>Question 3:</h3>
+
+      <p>
+        To identify the compromised account used for initial access, I pivoted from failed logon activity (Event ID 4625) to successful authentication events.
+      </p>
+
+      <p>
+        Successful logons in Windows are recorded under <strong>Event ID 4624</strong> in the Security log. Since the attacker’s IP address was previously identified as <strong>77.91.78.115</strong>, I filtered successful logon events originating specifically from that IP address.
+      </p>
+
+      <p><strong>The query used was:</strong></p>
+      <pre><code>index=goldenspray winlog.channel=Security event.code=4624 winlog.event_data.IpAddress=77.91.78.115</code></pre>
+
+      <p>
+        This query returns all successful logon events associated with the malicious source IP.
+      </p>
+
+      <p>
+        The number of results was manageable, allowing for manual review. By sorting chronologically and examining the earliest successful logon from the attacker’s IP, I identified the first instance of authenticated access.
+      </p>
+
+      <p>The event revealed that the compromised account was: <strong>SECURETECH\mwilliams</strong></p>
+
+      <p>Additional relevant details from the event:</p>
+      <ul>
+        <li><strong>Authentication Package:</strong> NTLM V2</li>
+        <li><strong>Workstation Name:</strong> kali</li>
+        <li><strong>Source IP Address:</strong> 77.91.78.115</li>
+        <li><strong>Timestamp:</strong> 9/9/2024 5:00:21.705 PM</li>
+      </ul>
+
+      <p>
+        The presence of a successful logon from an external IP address associated with prior failed authentication attempts strongly indicates that the account <strong>SECURETECH\mwilliams</strong> was successfully compromised and used for initial access.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/4.png" alt="insertimage4">
+        <figcaption>Compromised User</figcaption>
+      </figure>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 4 -->
+    <div class="task">
+      <h3>Question 4:</h3>
+
+      <p>
+        To identify the malicious file used for persistence, I shifted my focus from Security logs to <strong>Sysmon logs</strong>, as Sysmon provides enhanced visibility into file creation and process activity.
+      </p>
+
+      <p>
+        Specifically, I targeted <strong>Sysmon Event ID 11</strong>, which records file creation events. Since attackers commonly introduce malicious executables or scripts to establish persistence, monitoring file creation shortly after initial compromise is a logical investigative step.
+      </p>
+
+      <p>
+        From Question 3, the initial successful logon occurred at <strong>9/9/2024 5:00:21.705 PM</strong>.
+      </p>
+
+      <p>
+        Using this timestamp as a pivot point, I searched for file creation activity on ST-WIN02 occurring shortly after the initial access.
+      </p>
+
+      <p><strong>The query used was:</strong></p>
+      <pre><code>index=goldenspray winlog.channel="Microsoft-Windows-Sysmon/Operational" winlog.event_id=11 winlog.computer_name="ST-WIN02.SECURETECH.local"</code></pre>
+
+      <p>
+        Upon reviewing events after the initial compromise, I identified the following file creation event at <strong>9/9/2024 5:12:14.553 PM</strong>.
+      </p>
+
+      <p>
+        The event revealed that the file: <strong>OfficeUpdater.exe</strong> was created in: <code>C:\Windows\Temp\</code>
+      </p>
+
+      <p>The responsible process (<code>Image</code>) was:</p>
+      <p><code>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</code></p>
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/5.png" alt="insertimage4">
+        <figcaption>OfficeUpdater.exe</figcaption>
+      </figure>
+
+      <p>Several indicators strongly suggest malicious activity:</p>
+      <ul>
+        <li>The file was written to the <strong>Windows Temp directory</strong>, a common staging location for malware.</li>
+        <li>The filename <strong>"OfficeUpdater.exe"</strong> attempts to mimic legitimate Microsoft software.</li>
+        <li>The file was created by <strong>PowerShell</strong>, a frequently abused tool in post-exploitation scenarios.</li>
+        <li>The activity occurred shortly after successful unauthorized access.</li>
+      </ul>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 5 -->
+    <div class="task">
+      <h3>Question 5:</h3>
+
+      <p>
+        To identify the directory used by the attacker to store their tools, I continued analyzing <strong>Sysmon Event ID 11 (File Create)</strong> events on ST-WIN02, as this event captures both file and directory creation activity.
+      </p>
+
+      <p>
+        Using the same query from Question 4, I added specific fields to produce a cleaner and more structured output for analysis:
+      </p>
+
+      <pre><code>index=goldenspray winlog.channel="Microsoft-Windows-Sysmon/Operational" winlog.event_id=11 winlog.computer_name="ST-WIN02.SECURETECH.local"
+| table _time winlog.computer_name winlog.event_data.Image winlog.event_data.TargetFilename winlog.event_data.User</code></pre>
+
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/6.png" alt="insert image 6">
+        <figcaption>Tool Directory</figcaption>
+      </figure>
+
+      <p>
+        Shortly after the malicious file <strong>OfficeUpdater.exe</strong> was created in the Windows Temp directory, a new directory was created at <code>C:\Users\Public\Backup_Tools\</code>. The creation of a directory within the <strong>Public</strong> user path is highly suspicious, as this location is commonly used by attackers for staging tools due to its write access.
+      </p>
+
+      <p>
+        Further review of subsequent Sysmon Event ID 11 entries confirms malicious intent. At approximately <strong>17:23:06 (05:23:06 PM)</strong>. multiple executables were written into the Backup_Tools directory.
+      </p>
+
+      <p>The following well-known post-exploitation tools were observed:</p>
+      <ul>
+        <li>mimikatz.exe</li>
+        <li>PsExec.exe</li>
+        <li>PowerView.exe</li>
+      </ul>
+
+<figure class="image-block">
+        <img src="../assets/images/goldenspray/7.png" alt="insert image 6">
+        <figcaption>Malicious Tools</figcaption>
+      </figure>
+
+      <p>
+        Each of these tools is commonly associated with credential dumping, lateral movement, and Active Directory reconnaissance.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 6 -->
+    <div class="task">
+      <h3>Question 6</h3>
+      <p><strong>What's the process ID of the tool responsible for dumping credentials on ST-WIN02?</strong></p>
+
+      <p>
+        From Question 5, it was established that <strong>Mimikatz</strong> was introduced into the environment within the Backup_Tools directory. The next step was to determine when it was executed and identify the associated <strong>Process ID (PID)</strong> responsible for credential dumping activity.
+      </p>
+
+      <p>
+        Credential dumping tools such as Mimikatz commonly target the <strong>LSASS (Local Security Authority Subsystem Service)</strong> process to extract authentication material. Sysmon logs this behavior under <strong>Event ID 10 (Process Access)</strong>, which captures attempts by one process to access another process’s memory.
+      </p>
+
+      <p>To identify credential dumping activity, I executed the following query:</p>
+
+      <pre><code>index=goldenspray winlog.channel="Microsoft-Windows-Sysmon/Operational" winlog.event_id=10 winlog.computer_name="ST-WIN02.SECURETECH.local" winlog.event_data.TargetImage=*lsass*
+| stats count by winlog.event_data.CallTrace winlog.event_data.TargetImage, winlog.event_data.SourceImage, winlog.event_data.SourceProcessId</code></pre>
+
+
+      <!-- [InsertImage8] -->
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/8.png" alt="InsertImage8">
+        <figcaption>mimikatz ProcessId</figcaption>
+      </figure>
+
+      <p>This query filters for:</p>
+      <ul>
+        <li><strong>Sysmon Event ID 10</strong> (ProcessAccess)</li>
+        <li>Target process containing lsass</li>
+        <li>Activity on ST-WIN02</li>
+      </ul>
+
+      <p>
+        It then aggregates the results to clearly display the source process, the process being accessed and the associated sourceprocessID.
+      </p>
+
+      <p>The results show:</p>
+      <ul>
+        <li>mimikatz.exe executing from the C:\Users\Public\Backup_Tools\ directory</li>
+        <li>Targeting lsass.exe</li>
+        <li>With a <strong>SourceProcessId of 3708</strong></li>
+      </ul>
+
+      <p>
+        The credential dumping activity occurred at: <strong>9/9/2024 5:27:59.127 PM</strong>
+      </p>
+
+      <p>
+        Because accessing LSASS memory is a well-known technique for credential extraction, and Mimikatz is explicitly observed performing this action, it can be conclusively determined that:
+      </p>
+
+      <p>
+        The process ID responsible for dumping credentials on ST-WIN02 was <strong>3708</strong>.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 7 -->
+    <div class="task">
+      <h3>Question 7:</h3>
+      <p><strong>What's the second account username the attacker compromised and used for lateral movement?</strong></p>
+
+      <p>
+        From Question 6, it was established that <strong>Mimikatz executed successfully at 9/9/2024 5:27:59.127 PM</strong>, targeting lsass.exe for credential extraction. Given this activity, it is reasonable to assume that credential harvesting was successful.
+      </p>
+
+      <p>
+        The next logical step was to identify any new successful authentication events occurring shortly after the credential dump. If additional accounts were compromised, I would expect to see new <strong>Event ID 4624 (successful logon)</strong> events following the Mimikatz execution timestamp.
+      </p>
+
+      <p>
+        To identify this activity, I reused the following query, filtering for successful logons originating from the attacker’s IP address:
+      </p>
+
+      <pre><code>index=goldenspray winlog.channel=Security event.code=4624 winlog.event_data.IpAddress=77.91.78.115</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/9.png" alt="Insert Image 9">
+        <figcaption>Second Account Compromise</figcaption>
+      </figure>
+
+      <p>
+        Upon reviewing events after <strong>5:27:59 PM</strong>, the first successful logon event occurred at: <strong>9/9/2024 5:34:15.827 PM</strong>.
+      </p>
+
+      <p>
+        This event shows a successful authentication for the account: <strong>SECURETECH\jsmith</strong>.
+      </p>
+
+      <p>
+        This authentication event occurred shortly after the execution of Mimikatz and originated from the same malicious IP address (<strong>77.91.78.115</strong>). The timing strongly suggests that the attacker successfully extracted credentials for SECURETECH\jsmith and subsequently authenticated using those credentials.
+      </p>
+
+      <p>Given the chain of events:</p>
+      <ol>
+        <li>Mimikatz execution targeting LSASS</li>
+        <li>Credential dumping activity</li>
+        <li>New successful logon from the attacker’s IP</li>
+        <li>Different user account authenticated</li>
+      </ol>
+
+      <p>
+        It can be safely concluded that the second compromised account used for lateral movement was: <strong>SECURETECH\jsmith</strong>.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 8 -->
+    <div class="task">
+      <h3>Question 8:</h3>
+
+      <p>
+        To identify persistence on the domain controller, I initially searched for <strong>Security Event ID 4698</strong>, which indicates that a scheduled task was created. However, this query did not return relevant results.
+      </p>
+
+      <p>
+        Recognizing that scheduled task creation is also logged under the <strong>Microsoft-Windows-TaskScheduler/Operational</strong> channel, I pivoted to analyzing <strong>Event ID 106</strong>, which indicates that a scheduled task was successfully registered.
+      </p>
+
+      <p>After querying for Event ID 106, I identified the following event:</p>
+
+      <p>![[Pasted image 20260301171230.png]]</p>
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/10.png" alt="nsert image 10">
+        <figcaption>Task Creation</figcaption>
+      </figure>
+
+      <p>
+        The event details reveal that a scheduled task named: <strong>FilesCheck</strong> was registered on the domain controller: ST-DC01.SECURETECH.local and the task creation occurred at <strong>9/9/2024 5:38:44.406 PM</strong>.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 9 -->
+    <div class="task">
+      <h3>Question 9:</h3>
+      <p><strong>What type of encryption is used for Kerberos tickets in the environment?</strong></p>
+
+      <p>
+        To determine the Kerberos ticket encryption type used within the environment, I analyzed <strong>Event ID 4769</strong>, which represents <strong>Kerberos Service Ticket (TGS) requests</strong>. TGS events contain important details regarding the encryption type used when issuing service tickets. To review these events, I executed the following query:
+      </p>
+
+      <pre><code>index=goldenspray winlog.channel=Security event.code=4769</code></pre>
+
+      <p>Upon reviewing the returned logs, I identified the following event:</p>
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/11.png" alt="Insert Image 11">
+        <figcaption>TGS Encryption</figcaption>
+      </figure>
+
+      <p>
+        Within the event details, the field <strong>Ticket Encryption Type</strong> shows a value of 0x17. The hexadecimal value <strong>0x17</strong> corresponds to RC4-HMAC
+      </p>
+
+      <p>
+        RC4-HMAC is considered a legacy encryption algorithm and is weaker compared to modern Kerberos encryption standards such as AES128 or AES256.
+      </p>
+
+      <p>
+        The use of RC4-HMAC significantly increases the risk of Kerberoasting attacks, Offline password cracking of service account tickets, and Credential compromise leading to privilege escalation.
+      </p>
+
+      <p>
+        In Kerberoasting scenarios, attackers request TGS tickets for service accounts and attempt to crack the encrypted ticket offline. RC4-HMAC encryption makes this process considerably easier compared to stronger AES-based encryption.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <!-- QUESTION 10 -->
+    <div class="task">
+      <h3>Question 10:</h3>
+      <p><strong>Can you provide the full path of the output file in preparation for data exfiltration?</strong></p>
+
+      <p>
+        While analyzing <strong>Sysmon Event ID 11 (File Create)</strong> events earlier in the investigation, I identified activity that strongly indicated preparation for data exfiltration. During review of file creation activity on ST-WIN02, the following ZIP archive was created C:\Users\Public\Documents\Archive_8673812.zip.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/goldenspray/12.png" alt="Insert Image 11">
+        <figcaption>Archive ZIP for exfiltration</figcaption>
+      </figure>
+
+      <p>
+        The creation of a ZIP archive in the <strong>Public Documents</strong> directory is highly suspicious, particularly given the context of the ongoing intrusion.
+      </p>
+
+      <p>Several factors indicate this file was likely staged for exfiltration:</p>
+      <ul>
+        <li>The file is a <strong>compressed archive (.zip)</strong>, commonly used to bundle data prior to transfer.</li>
+        <li>It was created in a <strong>Public directory</strong>, a common attacker staging location.</li>
+        <li>The filename follows a semi-randomized naming convention (Archive_8673812.zip), which is consistent with automated archiving tools or scripted exfiltration preparation.</li>
+        <li>
+          This activity occurred after credential dumping and lateral movement, aligning with typical attack progression:
+          <strong>Initial Access -> Persistence -> Credential Access -> Lateral Movement -> Data Collection -> Exfiltration</strong>
+        </li>
+      </ul>
+
+      <p>
+        Attackers frequently compress collected data before transferring it to Cloud storage providers, External servers, and or Command-and-control infrastructure.
+      </p>
+
+      <p>________________________________________</p>
+    </div>
+
+    <hr class="section-divider">
+
+<!-- Keep IOC table exactly as provided (now as a real HTML table) -->
+<div class="table-wrap">
+  <table class="ioc-table">
+    <thead>
+      <tr>
+        <th>IOC Type</th>
+        <th>Value</th>
+        <th>Where Observed</th>
+        <th>Why It Matters</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Attacker IP Address</td>
+        <td><code>77.91.78.115</code></td>
+        <td>Security Log – Event ID 4625 / 4624</td>
+        <td>Source of brute-force attempts and successful compromise</td>
+      </tr>
+      <tr>
+        <td>Initial Compromised Account</td>
+        <td><code>SECURETECH\mwilliams</code></td>
+        <td>Security Log – Event ID 4624</td>
+        <td>First account successfully authenticated by attacker</td>
+      </tr>
+      <tr>
+        <td>Second Compromised Account</td>
+        <td><code>SECURETECH\jsmith</code></td>
+        <td>Security Log – Event ID 4624</td>
+        <td>Used for lateral movement after credential dumping</td>
+      </tr>
+      <tr>
+        <td>Suspicious Workstation Name</td>
+        <td><code>kali</code></td>
+        <td>Security Log – Event ID 4624</td>
+        <td>Indicates attacker-controlled Linux host</td>
+      </tr>
+      <tr>
+        <td>Malicious File (Persistence Payload)</td>
+        <td><code>C:\Windows\Temp\OfficeUpdater.exe</code></td>
+        <td>Sysmon Event ID 11</td>
+        <td>Malicious executable dropped via PowerShell</td>
+      </tr>
+      <tr>
+        <td>Malicious Tool Staging Directory</td>
+        <td><code>C:\Users\Public\Backup_Tools\</code></td>
+        <td>Sysmon Event ID 11</td>
+        <td>Centralized storage location for attacker toolset</td>
+      </tr>
+      <tr>
+        <td>Credential Dumping Tool</td>
+        <td><code>C:\Users\Public\Backup_Tools\mimikatz.exe</code></td>
+        <td>Sysmon Event ID 10</td>
+        <td>Used to access LSASS and extract credentials</td>
+      </tr>
+      <tr>
+        <td>LSASS Access</td>
+        <td><code>lsass.exe</code></td>
+        <td>Sysmon Event ID 10</td>
+        <td>Targeted for credential dumping</td>
+      </tr>
+      <tr>
+        <td>Credential Dumping Process ID</td>
+        <td><code>3708</code></td>
+        <td>Sysmon Event ID 10</td>
+        <td>Process ID responsible for LSASS memory access</td>
+      </tr>
+      <tr>
+        <td>Post-Exploitation Tools</td>
+        <td><code>PsExec.exe</code>, <code>PowerView.exe</code></td>
+        <td>Sysmon Event ID 11</td>
+        <td>Used for lateral movement and AD reconnaissance</td>
+      </tr>
+      <tr>
+        <td>Scheduled Task (Persistence on DC)</td>
+        <td><code>FilesCheck</code></td>
+        <td>TaskScheduler Event ID 106</td>
+        <td>Established persistence on Domain Controller</td>
+      </tr>
+      <tr>
+        <td>Domain Controller Targeted</td>
+        <td><code>ST-DC01.SECURETECH.local</code></td>
+        <td>TaskScheduler Event ID 106</td>
+        <td>Indicates escalation to Domain Controller</td>
+      </tr>
+      <tr>
+        <td>Exfiltration Archive</td>
+        <td><code>C:\Users\Public\Documents\Archive_8673812.zip</code></td>
+        <td>Sysmon Event ID 11</td>
+        <td>Data staged for exfiltration</td>
+      </tr>
+      <tr>
+        <td>Kerberos Encryption Type</td>
+        <td><code>RC4-HMAC (0x17)</code></td>
+        <td>Security Event ID 4769</td>
+        <td>Weak encryption enabling Kerberoasting risk</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

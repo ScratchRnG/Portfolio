@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: Whisper | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+
+  <style>
+    :root{
+      --card-bg: rgba(255,255,255,0.03);
+      --card-br: rgba(255,255,255,0.10);
+      --muted: rgba(255,255,255,0.70);
+      --muted-2: rgba(255,255,255,0.55);
+
+      /* Yellow theme helpers (matches your existing vibe) */
+      --yellow: #f7c948;
+      --yellow-soft: rgba(247, 201, 72, 0.14);
+      --yellow-br: rgba(247, 201, 72, 0.35);
+    }
+
+    .argus-content{
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px 18px 80px;
+    }
+
+    /* Big breathing room per task */
+    .task{
+      margin: 28px 0 34px;
+      padding: 18px 18px 8px;
+      border: 1px solid var(--card-br);
+      border-radius: 14px;
+      background: var(--card-bg);
+    }
+
+    .task h3{
+      margin: 0 0 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      letter-spacing: 0.2px;
+    }
+
+    /* Distinguish question from answer without adding new words */
+    .task .task-question{
+      margin: 10px 0 16px;
+      padding: 14px 14px;
+      border-left: 4px solid var(--yellow-br);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+      font-weight: 650;
+      line-height: 1.45;
+    }
+
+    .task .task-answer{
+      margin: 0;
+      padding: 0 4px 10px;
+      line-height: 1.6;
+    }
+
+    .task .task-answer p{
+      margin: 10px 0;
+    }
+
+    .task code{
+      color: var(--yellow) !important;
+      font-size: 0.95em;
+      padding: 0.12em 0.40em;
+      border-radius: 7px;
+      background: var(--yellow-soft) !important;
+      border: 1px solid var(--yellow-br) !important;
+    }
+
+    .task pre{
+      margin: 12px 0;
+      padding: 14px 14px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.10);
+      overflow-x: auto;
+    }
+
+    .task pre code{
+      color: var(--yellow) !important;
+      background: transparent !important;
+      border: none !important;
+      padding: 0 !important;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      display: block;
+      white-space: pre;
+    }
+
+    .task-sep{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 18px 0 6px;
+      color: var(--muted-2);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      letter-spacing: 0.5px;
+      user-select: none;
+    }
+    .task-sep::before,
+    .task-sep::after{
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+    }
+
+    /* Image block placeholder styling */
+    figure.image-block{
+      margin: 16px 0 18px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px dashed rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.02);
+    }
+    figure.image-block img{
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.25);
+    }
+    figure.image-block figcaption{
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .section-divider{
+      margin: 22px 0;
+      border: none;
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+    }
+  </style>
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Sherlock: Whisper</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+     Sherlock Scenario:
+    </p>
+
+    <p>
+      The SOC team received an alert on 21st January 2025 about suspicious activity originating from an employee's system (Alpha). Alpha was not authorized to engage in any offensive hacking activities within the network. The Incident Response (IR) team quickly acted, isolating the system so you can perform a thorough triage and investigation to determine the scope of the breach and potential impact on the network.
+    </p>
+
+    <p>
+      -----
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- TASK 1 -->
+    <section class="task">
+      <h3>Task 1</h3>
+
+      <p class="task-question">What is the hostname of the company computer involved in the unauthorized activity?</p>
+
+      <div class="task-answer">
+        <p>
+          To determine the hostname of the affected system, the <strong>SYSTEM hive</strong> was analyzed using <em>Registry Explorer</em>. After loading the <strong>SYSTEM</strong> hive into Registry Explorer, navigation proceeded to:
+        </p>
+
+        <p><code>SYSTEM -- &gt; ComputerName</code></p>
+
+        <p>
+          This registry key stores the configured hostname of the machine.
+        </p>
+
+        <p>
+          Upon examination, the system’s hostname was identified as: <strong>HelpDesk</strong>
+        </p>
+
+        <!-- [Insert Image 1] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/1.png" alt="Hostname">
+          <figcaption>Hostname</figcaption>
+        </figure>
+
+        <div class="task-sep">---</div>
+      </div>
+    </section>
+
+    <!-- TASK 2 -->
+    <section class="task">
+      <h3>Task 2</h3>
+
+      <p class="task-question">What is the IP address associated with the machine?</p>
+
+      <div class="task-answer">
+        <p>
+          To identify the IP address assigned to the system, the <strong>SYSTEM hive</strong> was again analyzed using <em>Registry Explorer</em>.
+        </p>
+
+        <p>
+          Rather than examining the <code>ComputerName</code> key, attention was shifted to the network configuration artifacts located under <code>Interfaces</code>
+        </p>
+
+        <p>
+          Within the <code>Interfaces</code> subkeys, each GUID represents a network adapter configuration. Reviewing the values associated with the active interface revealed a field labeled <strong>DhcpIPAddress</strong>, which stores the IPv4 address assigned to the system at the time of the DHCP lease.
+        </p>
+
+        <p>
+          From this key, the system’s assigned IP address was identified. Additionally, the <strong>DhcpServer</strong> value showed: <strong>192.168.159.254</strong> This indicates the DHCP server responsible for assigning the IP address to the host.
+        </p>
+
+        <!-- [Insert Image 2] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/2.png" alt="Insert Image 2">
+          <figcaption>Machine IP.</figcaption>
+        </figure>
+
+        <div class="task-sep">------</div>
+      </div>
+    </section>
+
+    <!-- TASK 3 -->
+    <section class="task">
+      <h3>Task 3</h3>
+
+      <p class="task-question">What is the Security Identifier (SID) of the computer involved in the incident?</p>
+
+      <div class="task-answer">
+        <p>
+          To identify this answer, I once again explored the SAM registry hive. Once in, there was two <code>members</code>:
+        </p>
+
+        <!-- [insert image 3] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/3.png" alt="Insert Image 3">
+          <figcaption></figcaption>
+        </figure>
+
+        <p>
+          We see two SIDs with one of them being the victim computer.
+        </p>
+
+        <pre><code>S-1-5-21-953115734-2025219997-3674921352
+</code></pre>
+
+        <div class="task-sep">---</div>
+      </div>
+    </section>
+
+    <!-- TASK 4 -->
+    <section class="task">
+      <h3>Task 4</h3>
+
+      <p class="task-question">What was the timezone setting of the machine?</p>
+
+      <div class="task-answer">
+        <p>
+          To determine the system’s configured timezone, the <strong>SYSTEM hive</strong> was examined using <em>Registry Explorer</em>. Navigation proceeded to the following registry key <code>TimeZoneInformation</code>
+        </p>
+
+        <p>
+          Within this key, we see the timezone configured on the machine at the time the hive was last written.
+        </p>
+
+        <p>
+          Upon reviewing this value, the system’s timezone setting was identified as: <code>Pacific Standard Time</code>
+        </p>
+
+        <!-- [Insert Image 4] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/4.png" alt="Insert Image 4">
+          <figcaption>Timezone</figcaption>
+        </figure>
+
+        <div class="task-sep">----</div>
+      </div>
+    </section>
+
+    <!-- TASK 5 -->
+    <section class="task">
+      <h3>Task 5</h3>
+
+      <p class="task-question">Which tool did the attacker use to escalate privileges and extract sensitive credentials from the system?</p>
+
+      <div class="task-answer">
+        <p>
+          To identify the tool used by the attacker, multiple forensic artifacts were analyzed, including:
+        </p>
+
+        <p>
+          - <strong>$MFT (Master File Table)</strong><br>
+          - <strong>$UsnJrnl ($J$)</strong><br>
+          - <strong>Windows Event Logs</strong>
+        </p>
+
+        <p>During examination of the <strong>$MFT</strong>, numerous file entries referencing <strong>Mimikatz</strong> were observed:</p>
+
+        <!-- [Insert Image 5] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/5.png" alt="Insert Image 5">
+          <figcaption>Credential Extraction Tool</figcaption>
+        </figure>
+
+        <p>
+          The presence of <code>mimikatz.exe</code> artifacts within the file system metadata indicates execution or staging of the tool on the compromised system.
+        </p>
+
+        <p><strong>Mimikatz</strong> is a well-known post-exploitation utility commonly used to:</p>
+
+        <p>
+          - Dump plaintext credentials from memory<br>
+          - Extract NTLM password hashes<br>
+          - Retrieve Kerberos tickets<br>
+          - Perform Pass-the-Hash and Pass-the-Ticket attacks
+        </p>
+
+        <p>
+          Given its functionality and the observed artifacts, it can be concluded that the attacker leveraged <strong>Mimikatz</strong> to escalate privileges and extract sensitive credentials from the system.
+        </p>
+
+        <div class="task-sep">------</div>
+      </div>
+    </section>
+
+    <!-- TASK 6 -->
+    <section class="task">
+      <h3>Task 6</h3>
+
+      <p class="task-question">What is the timestamp of the last execution of the credential extraction tool on the system used by the attacker?</p>
+
+      <div class="task-answer">
+        <p>
+          To determine the last execution time of the credential extraction tool, <strong>Windows Prefetch artifacts</strong> were analyzed.
+        </p>
+
+        <p>Prefetch files track application execution metadata, including:</p>
+
+        <p>
+          - Last execution timestamp<br>
+          - Run count<br>
+          - File path and associated resources
+        </p>
+
+        <p>
+          The Prefetch directory was parsed using <strong>PECmd.exe</strong> from the Eric Zimmerman tool suite.
+        </p>
+
+        <p>
+          After parsing the Prefetch files, the results were filtered for entries related to <strong>Mimikatz</strong>. The parsed output revealed execution metadata, including the last recorded run time.
+        </p>
+
+        <!-- [Insert Image 6] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/6.png" alt="Insert Image 6">
+          <figcaption>Execution</figcaption>
+        </figure>
+
+        <p>
+          The last execution timestamp of the credential extraction tool was identified as: <strong>2025-01-21 00:21:41</strong>
+        </p>
+
+        <p>
+          This timestamp represents the most recent recorded execution of Mimikatz on the system.
+        </p>
+
+        <div class="task-sep">-----</div>
+      </div>
+    </section>
+
+    <!-- TASK 7 -->
+    <section class="task">
+      <h3>Task 7</h3>
+
+      <p class="task-question">What is the timestamp when the attacker first downloaded the credential extraction tool onto the system?</p>
+
+      <div class="task-answer">
+        <p>
+          To identify when the credential extraction tool was first introduced to the system, the <strong>$MFT (Master File Table)</strong> was analyzed using <strong>Timeline Explorer</strong>.
+        </p>
+
+        <p>
+          Given that the organization detected suspicious activity on <strong>January 21, 2025</strong>, the analysis was narrowed to that date to streamline the investigation.
+        </p>
+
+        <p>Within the $MFT dataset, entries were filtered for references to <strong>mimikatz</strong>, with particular attention given to:</p>
+
+        <p>
+          - <strong>File creation events</strong><br>
+          - User activity associated with the account <strong>Alpha</strong><br>
+          - Timestamps preceding the known execution time
+        </p>
+
+        <p>
+          During this review, a file creation event associated with <code>mimikatz</code> and the user <strong>Alpha</strong> was identified:
+        </p>
+
+        <!-- [Insert Image 7] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/7.png" alt="Insert Image 7">
+          <figcaption></figcaption>
+        </figure>
+
+        <p>The earliest observed file creation timestamp for the tool was: <strong>2025-01-21 00:19:26</strong></p>
+
+        <p>
+          This timestamp represents the first recorded instance of the attacker downloading the credential extraction tool onto the system, occurring shortly before its execution.
+        </p>
+
+        <div class="task-sep">-----</div>
+      </div>
+    </section>
+
+    <!-- TASK 8 -->
+    <section class="task">
+      <h3>Task 8</h3>
+
+      <p class="task-question">After using the previously mentioned tool, the attacker downloaded a script to scan the domain controller. What is the URL from which the attacker downloaded this script?</p>
+
+      <div class="task-answer">
+        <p>
+          Since the initial download of <strong>Mimikatz</strong> occurred at <strong>2025-01-21 00:19:26</strong>, the investigation focused on artifacts generated <em>after</em> this timestamp.
+        </p>
+
+        <p>Several forensic sources were reviewed, including:</p>
+
+        <p>
+          - <strong>$MFT</strong><br>
+          - <strong>$UsnJrnl</strong><br>
+          - <strong>Windows Event Logs</strong> (with emphasis on Event ID 4104 – PowerShell Script Block Logging)
+        </p>
+
+        <p>
+          However, these sources did not immediately reveal the script’s download origin.
+        </p>
+
+        <p>
+          Given that the attacker likely retrieved the script through a browser session, attention shifted to browser artifacts. Examination of the Microsoft Edge browsing history database located at:
+        </p>
+
+        <pre><code>C:\Users\Alpha\AppData\Local\Microsoft\Edge\User Data\Default\History
+</code></pre>
+
+        <p>revealed entries corresponding to suspicious outbound connections.</p>
+
+        <!-- [Insert Image 8] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/8.png" alt="Insert Image 8">
+          <figcaption>URL</figcaption>
+        </figure>
+
+        <p>
+          Within the browsing history, a URL was identified showing that the user account <strong>Alpha</strong> accessed a remote location hosting a malicious script. This URL corresponds to the domain controller scanning script downloaded by the attacker.
+        </p>
+
+        <p>
+          This finding confirms that the attacker used the system’s web browser to retrieve the post-exploitation script following credential extraction activities.
+        </p>
+
+        <div class="task-sep">---</div>
+      </div>
+    </section>
+
+    <!-- TASK 9 -->
+    <section class="task">
+      <h3>Task 9</h3>
+
+      <p class="task-question">The filename of the script was identified through analysis of the browser artifact examined in <strong>Task 8</strong>.</p>
+
+      <div class="task-answer">
+        <p>
+          Within the Microsoft Edge browsing history and associated download records, the downloaded file metadata was visible. The screenshot revealed both:
+        </p>
+
+        <p>
+          - The remote URL of the script<br>
+          - The local file path where it was saved
+        </p>
+
+        <p>The artifact showed that the attacker saved the script to the following location:</p>
+
+        <p>C:\Users\Alpha\Downloads\DC-Scan.ps1</p>
+
+        <p>
+          This confirms that the malicious domain controller scanning script was saved locally under the <strong>Alpha</strong> user’s Downloads directory, retaining the filename <strong>DC-Scan.ps1</strong>.
+        </p>
+
+        <p>
+          The presence of a PowerShell script (<code>.ps1</code>) aligns with post-exploitation behavior commonly used for domain enumeration and lateral movement preparation.
+        </p>
+
+        <div class="task-sep">------</div>
+      </div>
+    </section>
+
+    <!-- TASK 10 -->
+    <section class="task">
+      <h3>Task 10</h3>
+
+      <p class="task-question">What is the timestamp indicating when the attacker deleted the script after it was downloaded?</p>
+
+      <div class="task-answer">
+        <p>To determine when the attacker removed the script from the system, the <strong>$UsnJrnl ($J)</strong> artifact was analyzed.</p>
+
+        <p>The USN Journal is particularly valuable in forensic investigations because it records low-level file system change events, including:</p>
+
+        <p>
+          - File creation<br>
+          - Modification<br>
+          - Renaming<br>
+          - Deletion
+        </p>
+
+        <p>Using Timeline Explorer, the $J file was parsed and filtered for entries related to:</p>
+
+        <p>DC-Scan.ps1</p>
+
+        <!-- [Insert Image 10] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/10.png" alt="Insert Image 10">
+          <figcaption>Tool deletion</figcaption>
+        </figure>
+
+        <p>
+          Within the filtered results, an entry with the reason <strong>FileDelete</strong> was identified. This event indicates that the file was removed from the filesystem.
+        </p>
+
+        <p>
+          The timestamp associated with the <strong>FileDelete</strong> event represents the moment the attacker deleted the script from the system: <code>2025-01-21 01:27:47</code>
+        </p>
+
+        <p>
+          Because the USN Journal logs deletion events even after a file is removed, this artifact provides high-confidence evidence of the exact deletion time.
+        </p>
+
+        <div class="task-sep">------</div>
+      </div>
+    </section>
+
+    <!-- TASK 11 -->
+    <section class="task">
+      <h3>Task 11</h3>
+
+      <p class="task-question">What is the name of the shared file that the attacker accessed?</p>
+
+      <div class="task-answer">
+        <p>
+          The question specifically references a <strong>shared file</strong>, indicating that the artifact likely involves a network path rather than a local file.
+        </p>
+
+        <p>
+          During earlier registry analysis, the <strong>NTUSER.DAT</strong> hive for user <strong>Alpha</strong> was examined using <em>Registry Explorer</em>. While reviewing user activity artifacts (such as RecentDocs), a reference to a file was identified
+        </p>
+
+        <!-- [Insert Image 11] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/11.png" alt="Insert Image 11">
+          <figcaption>File identified whithin Registry Explorer</figcaption>
+        </figure>
+
+        <p>The file observed was: <code>Secret.xlsx</code></p>
+
+        <p>To validate the finding, the file properties were inspected:</p>
+
+        <!-- [Insert Image 12] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/12.png" alt="Insert Image 12">
+          <figcaption>File Path</figcaption>
+        </figure>
+
+        <p>
+          The artifact confirms that the attacker accessed the shared file: <strong>\CYBERUP\Users\Administrator\Desktop\Top-Secret\Secret.xlsx</strong>
+        </p>
+
+        <div class="task-sep">-----</div>
+      </div>
+    </section>
+
+    <!-- TASK 12 -->
+    <section class="task">
+      <h3>Task 12</h3>
+
+      <p class="task-question">To persist, the attacker created a new user account. What is the SID of the newly created account?</p>
+
+      <div class="task-answer">
+        <p>To identify whether a new user account was created for persistence, the <strong>Windows Security Event Logs</strong> were analyzed.</p>
+
+        <p>Specifically, the logs were filtered for <strong>Event ID 4720</strong>, which corresponds to:</p>
+
+        <p>“A user account was created.”</p>
+
+        <p>
+          Filtering for Event ID <strong>4720</strong> revealed the creation of a new account shortly after the attacker’s post-exploitation activity.
+        </p>
+
+        <!-- [Insert Image 13] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/13.png" alt="Insert Image 13">
+          <figcaption>Malicious Account SID</figcaption>
+        </figure>
+
+        <p>The event details show the following:</p>
+
+        <p>
+          - <strong>Username:</strong> <code>Admin</code><br>
+          - <strong>Domain:</strong> <code>HELPDESK</code><br>
+          - <strong>SID:</strong> <code>S-1-5-21-953115734-2025219997-3674921352-1002</code><br>
+          - <strong>Time Created:</strong> <code>2025-01-21 01:02:00</code>
+        </p>
+
+        <p>
+          This confirms that the attacker established persistence by creating a new local account named <strong>Admin</strong>, allowing continued access to the system even if the original compromised credentials were revoked.
+        </p>
+
+        <div class="task-sep">------</div>
+      </div>
+    </section>
+
+    <!-- TASK 13 -->
+    <section class="task">
+      <h3>Task 13</h3>
+
+      <p class="task-question">How many times has the newly created user logged in?</p>
+
+      <div class="task-answer">
+        <p><strong>Answer: 0 times</strong></p>
+
+        <p>
+          To determine whether the newly created account was used after its creation, the <strong>Windows Security Event Logs</strong> were analyzed.
+        </p>
+
+        <p>The investigation focused on:</p>
+
+        <p>
+          - <strong>Event ID 4624</strong> – Successful logon<br>
+          - <strong>Event ID 4648</strong> – Logon attempt using explicit credentials
+        </p>
+
+        <p>An additional filter was applied using the specific SID of the newly created account:</p>
+
+        <p>S-1-5-21-953115734-2025219997-3674921352-1002</p>
+
+        <p>
+          After executing the search across the Security logs, <strong>no matching events were returned</strong>.
+        </p>
+
+        <p>
+          This indicates that although the attacker created the account (<code>Admin</code>) for persistence at <strong>2025-01-21 01:02:00</strong>, there is no evidence that the account was subsequently used to authenticate to the system.
+        </p>
+
+        <div class="task-sep">---</div>
+      </div>
+    </section>
+
+    <!-- TASK 14 -->
+    <section class="task">
+      <h3>Task 14</h3>
+
+      <p class="task-question">What is the password of the newly created user?</p>
+
+      <div class="task-answer">
+        <p>
+          Initial analysis focused on identifying whether the password was exposed in clear text through PowerShell activity. Event IDs <strong>4103</strong> (Module Logging) and <strong>4104</strong> (Script Block Logging) were reviewed for evidence of third-party tooling such as <strong>PowerView</strong> or <strong>PowerUp</strong>, which had appeared in earlier logs.
+        </p>
+
+        <p>
+          However, no PowerShell logs revealed a clear-text password or account creation command containing credential parameters.
+        </p>
+
+        <p>
+          Given that direct logging did not reveal the password, the investigation shifted to offline credential extraction using the system registry hives:
+        </p>
+
+        <p>
+          - <strong>SAM</strong><br>
+          - <strong>SYSTEM</strong><br>
+          - <strong>SECURITY</strong>
+        </p>
+
+        <p>
+          These hives were extracted and analyzed using <strong>Impacket’s <code>secretsdump.py</code></strong> tool from a Parrot OS environment:
+        </p>
+
+        <p>python3 /usr/share/doc/python3-impacket/examples/secretsdump.py -sam SAM -security SECURITY -system SYSTEM LOCAL</p>
+
+        <p>The output revealed the local account hashes:</p>
+
+        <p>Admin:1002:aad3b435b51404eeaad3b435b51404ee:58a478135a93ac3bf058a5ea0e8fdb71:::</p>
+
+        <p>The NTLM hash associated with the newly created <code>Admin</code> account was:</p>
+
+        <p>58a478135a93ac3bf058a5ea0e8fdb71</p>
+
+        <p>
+          To recover the plaintext password, the NTLM hash was cracked using <strong>hashcat</strong> with mode <strong>1000</strong> (NTLM):
+        </p>
+
+        <p>hashcat -m 1000 admin_hash /usr/share/wordlists/rockyou.txt</p>
+
+        <p>
+          After running the attack against the <code>rockyou.txt</code> wordlist, the plaintext password for the malicious <code>Admin</code> account was successfully recovered.
+        </p>
+
+        <!-- [Insert Final Image] -->
+        <figure class="image-block">
+          <img src="../assets/images/whisper/LastImage.png" alt="Admin Password">
+          <figcaption>Cleartext password</figcaption>
+        </figure>
+      </div>
+    </section>
+
+  </main>
+
+</div>
+
+</body>
+</html>
