@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: ShadowRoast Challenge | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Sherlock: ShadowRoast Challenge</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Scenario</h2>
+
+    <p>
+      As a cybersecurity analyst at TechSecure Corp, you have been alerted to unusual activities within the company's Active Directory environment. Initial reports suggest unauthorized access and possible privilege escalation attempts.
+    </p>
+
+    <p>
+      Your task is to analyze the provided logs to uncover the attack's extent and identify the malicious actions taken by the attacker. Your investigation will be crucial in mitigating the threat and securing the network.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Executive Summary:</h2>
+
+    <p>
+      The investigation identified a multi-stage compromise within the CORPNET environment that began when the user <strong>sanderson</strong> executed a malicious file named <strong><code>AdobeUpdater.exe</code></strong> from the Downloads directory on <strong>Office-PC.CORPNET.local</strong>. The executable initiated a suspicious process chain involving <strong>cmd.exe</strong> and <strong>PowerShell with execution policy bypass</strong>, and established persistence by creating a <strong>registry Run key (<code>wyW5PZyF</code>)</strong>. The attacker then executed <strong>Rubeus</strong> to perform an <strong>AS-REP Roasting attack</strong>, allowing them to harvest Kerberos authentication material and subsequently compromise the domain account <strong><code>tcooper</code></strong>. After gaining valid credentials, the adversary leveraged the account for <strong>lateral movement</strong>, enabled <strong>RDP access</strong>, and attempted to manipulate Active Directory using <strong>Mimikatz DCShadow techniques</strong>. The attacker ultimately staged sensitive data by compressing files into <strong><code>CrashDump.zip</code></strong>, indicating preparation for <strong>data exfiltration</strong> and demonstrating a progression from initial access to credential abuse, persistence, privilege escalation, and data staging within the environment.
+    </p>
+
+    <hr class="section-divider">
+
+    <div class="task">
+      <h3>Q1:</h3>
+
+      <p><strong>What's the malicious file name utilized by the attacker for initial access?</strong></p>
+
+      <p>
+        To identify the malicious file used by the attacker to gain initial access, I began by analyzing <strong>process creation events (Event ID 1)</strong> within the <code>shadowroast</code> index. Process creation logs are valuable during investigations because they provide visibility into executable files launched on the system, including their <strong>command line arguments, parent processes, and execution paths</strong>.
+      </p>
+
+      <p>I executed the following query:</p>
+
+      <pre><code>index=shadowroast event.code=1 
+| stats count by winlog.computer_name, winlog.event_data.CommandLine, winlog.event_data.CurrentDirectory, winlog.event_data.Image, winlog.event_data.ParentImage, winlog.event_data.ParentCommandLine,winlog.event_data.ProcessId, winlog.event_data.ParentProcessId _time
+| sort _time</code></pre>
+
+      <p>
+        This query aggregates process creation events and highlights key attributes such as the <strong>executed binary, its parent process, command line arguments, and execution directory</strong>. The goal was to identify any suspicious executables or abnormal process chains that could indicate malicious activity.
+      </p>
+
+      <p>
+        During the review of the results, I identified a suspicious execution involving the file <strong><code>AdobeUpdater.exe</code></strong>, which was launched from the user's <strong>Downloads directory</strong> by the user <strong><code>sanderson</code></strong> on the host <strong><code>Office-PC.CORPNET.local</code></strong>.
+      </p>
+
+      <ul>
+        <li><strong>Host:</strong> <code>Office-PC.CORPNET.local</code></li>
+        <li><strong>User:</strong> <code>sanderson</code></li>
+        <li><strong>Execution Time:</strong> <code>2024-08-06 01:07:34.837</code></li>
+        <li><strong>Executable:</strong> <code>AdobeUpdater.exe</code></li>
+      </ul>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/1.png" alt="AdobeUpdater.exe initial execution">
+        <figcaption>AdobeUpdater.exe execution from the Downloads directory on Office-PC.CORPNET.local</figcaption>
+      </figure>
+
+      <p>
+        Further inspection revealed a suspicious process chain. The executable <strong>spawned <code>cmd.exe</code> (PID 2320)</strong>, which subsequently launched <strong><code>powershell.exe</code> (PID 5228)</strong> with the argument <strong><code>-ep bypass</code></strong>, indicating an attempt to bypass PowerShell execution policy restrictions.
+      </p>
+
+      <p>
+        This behavior strongly suggests that <strong><code>AdobeUpdater.exe</code> was a malicious or trojanized executable used as the initial access vector</strong>, masquerading as a legitimate software updater while executing a malicious PowerShell payload.
+      </p>
+    </div>
+
+    <div class="task">
+      <h3>Q2:</h3>
+
+      <p><strong>What's the registry run key name created by the attacker for maintaining persistence?</strong></p>
+
+      <p>
+        To identify the <strong>registry Run key created by the attacker for persistence</strong>, I analyzed <strong>registry modification events (Event ID 13)</strong>. Event ID 13 captures registry value creation or modification activity, which is commonly used by attackers to establish <strong>persistence mechanisms</strong> that execute malware each time a user logs into the system.
+      </p>
+
+      <p>I executed the following query:</p>
+
+      <pre><code>index=shadowroast winlog.computer_name=Office-PC.CORPNET.local winlog.event_data.Image=*Adobe* event.code=13
+| stats count by winlog.event_data.TargetObject, winlog.event_data.Image
+| sort _time</code></pre>
+
+      <p>
+        This query filters for <strong>registry value creation events</strong> originating from processes containing <code>Adobe</code> in the image path. Since the previously identified malicious executable was <strong><code>AdobeUpdater.exe</code></strong>, this filter helps isolate registry activity associated with that binary.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/2.png" alt="Registry run key persistence">
+        <figcaption>Registry Run key created for persistence by AdobeUpdater.exe</figcaption>
+      </figure>
+
+      <p>
+        After executing the query, the results revealed that <strong><code>C:\Users\sanderson\Downloads\AdobeUpdater.exe</code></strong> created a registry Run key to maintain persistence on the system.
+      </p>
+
+      <p>The registry entry created was:</p>
+
+      <ul>
+        <li><strong>Registry Path:</strong> <code>...\Run\wyW5PZyF</code></li>
+        <li><strong>Executable:</strong> <code>C:\Users\sanderson\Downloads\AdobeUpdater.exe</code></li>
+      </ul>
+
+      <p>
+        Run keys are a well-known persistence mechanism because any executable referenced within this location will automatically execute when the user logs in. The presence of this entry indicates that the attacker configured the malicious binary to <strong>automatically launch upon user logon</strong>, ensuring continued access to the compromised system.
+      </p>
+
+      <p>
+        So overall, the <strong>registry Run key name created by the attacker is <code>wyW5PZyF</code>.</strong>
+      </p>
+    </div>
+
+    <div class="task">
+      <h3>Q3:</h3>
+
+      <p><strong>What's the full path of the directory used by the attacker for storing his dropped tools?</strong></p>
+
+      <p>
+        To identify the directory used by the attacker to store their tools, I analyzed <strong>file creation events (Event ID 11)</strong>. Event ID 11 logs newly created files and directories, making it useful for detecting <strong>malware staging locations or attacker tool repositories</strong>.
+      </p>
+
+      <p>I executed the following query:</p>
+
+      <pre><code>index=shadowroast event.code=11 zip</code></pre>
+
+      <p>
+        This query searches for <strong>file creation events containing the keyword <code>zip</code></strong>, as attackers frequently compress tools, payloads, or exfiltrated data into archive files for easier transport and execution. ZIP archives are commonly used during post-compromise activity to <strong>bundle offensive tooling or stage data for later use</strong>.
+      </p>
+
+      <p>
+        Upon reviewing the results, I identified a relevant event occurring at <strong><code>2024-08-06 01:21:04.278</code></strong> on the host <strong><code>FileServer.CORPNET.local</code></strong>, associated with the user <strong><code>CORPNET\tcooper</code></strong>.
+      </p>
+
+      <p>The event revealed the creation of a ZIP archive located in the following directory:</p>
+
+      <ul>
+        <li><strong>Host:</strong> <code>FileServer.CORPNET.local</code></li>
+        <li><strong>User:</strong> <code>CORPNET\tcooper</code></li>
+        <li><strong>Timestamp:</strong> <code>2024-08-06 01:21:04.278</code></li>
+      </ul>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/3.png" alt="Dropped tools directory">
+        <figcaption>ZIP archive creation associated with attacker staging activity on FileServer.CORPNET.local</figcaption>
+      </figure>
+
+      <p>
+        This activity suggests that the attacker had already <strong>moved laterally within the environment</strong>, compromising an additional user account and accessing another system to stage their tools. The use of a ZIP archive further supports the likelihood that this directory was used as a <strong>storage location for attacker utilities or malicious payloads</strong>.
+      </p>
+    </div>
+
+    <div class="task">
+      <h3>Q4:</h3>
+
+      <p><strong>What tool was used by the attacker for privilege escalation and credential harvesting?</strong></p>
+
+      <p>
+        To identify the tool used by the attacker for <strong>privilege escalation and credential harvesting</strong>, I revisited the <strong>process creation events (Event ID 1)</strong> previously analyzed in Question 1. These logs provide visibility into executed binaries and their associated command-line arguments, which can reveal attacker tooling and techniques.
+      </p>
+
+      <p>
+        During the review of these events, I observed that at <strong><code>2024-08-06 01:10:45.053</code></strong>, the previously identified <strong>PowerShell process (PID 5228)</strong> spawned a new executable named <strong><code>BackupUtility.exe</code></strong>.
+      </p>
+
+      <p>The command-line arguments associated with this process were:</p>
+
+      <pre><code>"C:\Users\Default\AppData\Local\Temp\BackupUtility.exe" asreproast /format:hashcat</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/4.png" alt="BackupUtility execution">
+        <figcaption>BackupUtility.exe execution with AS-REP roasting arguments</figcaption>
+      </figure>
+
+      <p>
+        This command immediately raised suspicion due to the presence of the <strong><code>asreproast</code></strong> argument.
+      </p>
+
+      <p><strong>AS-REP Roasting</strong> is a well-known <strong>Active Directory attack technique</strong> that targets accounts configured with the setting:</p>
+
+      <pre><code>Do not require Kerberos preauthentication</code></pre>
+
+      <p>When this configuration is enabled:</p>
+
+      <ul>
+        <li>The domain controller returns an <strong>encrypted authentication response (AS-REP)</strong> without requiring the user’s password.</li>
+        <li>Attackers can request this authentication data directly from the domain controller.</li>
+        <li>The returned <strong>Kerberos ticket hash can then be cracked offline</strong>, allowing attackers to recover the account’s plaintext password.</li>
+      </ul>
+
+      <p>
+        The use of the argument <strong><code>/format:hashcat</code></strong> further indicates that the attacker intended to export the captured hashes in a format compatible with the <strong>Hashcat password cracking tool</strong>.
+      </p>
+
+      <p>
+        Upon expanding the event details in Splunk, it became clear that <strong><code>BackupUtility.exe</code> appears to be a renamed instance of the tool <em>Rubeus</em></strong>, a well-known post-exploitation framework used for Kerberos abuse and credential harvesting.
+      </p>
+
+      <p>Rubeus supports multiple Kerberos-based attack techniques, including:</p>
+
+      <ul>
+        <li><strong>AS-REP Roasting</strong></li>
+        <li><strong>Kerberoasting</strong></li>
+        <li><strong>Ticket extraction and manipulation</strong></li>
+        <li><strong>Privilege escalation through Kerberos abuse</strong></li>
+      </ul>
+
+      <p>
+        Based on the command-line arguments and process behavior observed in the logs, the attacker used <strong>Rubeus</strong> to perform <strong>AS-REP Roasting</strong>, likely targeting vulnerable domain accounts in order to recover credentials through offline password cracking.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/5.png" alt="Rubeus identification">
+        <figcaption>Expanded Splunk event details indicating BackupUtility.exe is a renamed instance of Rubeus</figcaption>
+      </figure>
+    </div>
+
+    <div class="task">
+      <h3>Q5:</h3>
+
+      <p><strong>Was the attacker's credential harvesting successful? If so, can you provide the compromised domain account username?</strong></p>
+
+      <p>Yes, the credential harvesting attempt was <strong>successful</strong>.</p>
+
+      <p>
+        Following the discovery of the <strong>AS-REP roasting activity executed via Rubeus</strong> at <strong><code>2024-08-06 01:10:45.053</code></strong>, I pivoted to reviewing <strong>successful authentication events (Event ID 4624)</strong> to determine whether the attacker was able to leverage any cracked credentials.
+      </p>
+
+      <p>
+        The objective was to identify <strong>new logon activity occurring shortly after the credential harvesting attempt</strong>, which could indicate that the attacker had successfully recovered a password and used it to authenticate to the environment.
+      </p>
+
+      <p>To accomplish this, I executed the following query:</p>
+
+      <pre><code>index=shadowroast event.code=4624
+| stats count by winlog.event_data.TargetUserName, _time</code></pre>
+
+      <p>
+        This query retrieves successful logon events and groups them by username and timestamp, allowing us to observe authentication activity following the credential harvesting attempt.
+      </p>
+
+      <p>
+        Upon reviewing the results, I observed a successful logon event for the domain user <strong><code>tcooper</code></strong> at <strong><code>2024-08-06 01:13:28.285</code></strong>.
+      </p>
+
+      <p>
+        This authentication event occurred <strong>approximately three minutes after the Rubeus AS-REP roasting command was executed</strong>, strongly suggesting that the attacker successfully cracked the harvested Kerberos hash and used the recovered credentials to authenticate to the environment.
+      </p>
+
+      <p>
+        Additionally, multiple logon events involving <strong><code>tcooper</code></strong> were observed following the initial authentication, continuing until <strong><code>2024-08-06 01:19:20.137</code></strong>. This pattern further reinforces that the attacker had obtained valid credentials and was actively using the compromised account during post-exploitation activities.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/6.png" alt="Successful tcooper authentication">
+        <figcaption>Successful authentication events involving the compromised domain account tcooper</figcaption>
+      </figure>
+    </div>
+
+    <div class="task">
+      <h3>Q6:</h3>
+
+      <p><strong>What's the tool used by the attacker for registering a rogue Domain Controller to manipulate Active Directory data?</strong></p>
+
+      <p>
+        To identify the tool used by the attacker to register a <strong>rogue Domain Controller</strong>, I focused on Windows security events associated with <strong>Active Directory replication activity</strong>. Specifically, events <strong>4928</strong>, <strong>4929</strong>, and <strong>4662</strong> are commonly associated with replication permissions and directory replication operations, which can be abused during attacks such as <strong>DCShadow</strong>.
+      </p>
+
+      <p>
+        DCShadow is a technique that allows an attacker to <strong>register a rogue Domain Controller and push malicious changes into Active Directory</strong>, effectively bypassing many traditional monitoring controls.
+      </p>
+
+      <p>
+        To investigate this behavior, I filtered for <strong>Event ID 4929</strong>, which logs when <strong>Active Directory replication is initiated</strong>.
+      </p>
+
+      <p>Upon reviewing the results, I observed the following suspicious activity:</p>
+
+      <ul>
+        <li><strong>Event ID:</strong> 4929</li>
+        <li><strong>Source System:</strong> <code>Office-PC.CORPNET.local</code></li>
+      </ul>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/7.png" alt="DCShadow replication activity">
+        <figcaption>Active Directory replication activity originating from Office-PC.CORPNET.local</figcaption>
+      </figure>
+
+      <p>
+        Under normal circumstances, <strong>Active Directory replication should only occur between legitimate domain controllers</strong>. However, in this case, the replication request originated from <strong><code>Office-PC.CORPNET.local</code></strong>, which is <strong>not a domain controller</strong>.
+      </p>
+
+      <p>
+        This anomaly strongly suggests that the attacker configured the compromised system to <strong>impersonate a domain controller and initiate replication activity</strong>, which is a defining characteristic of a <strong>DCShadow attack</strong>.
+      </p>
+
+      <p>
+        DCShadow attacks are commonly executed using the <strong>Mimikatz</strong> toolkit, which contains built-in modules specifically designed to register rogue domain controllers and manipulate Active Directory replication metadata.
+      </p>
+
+      <p>
+        Based on the abnormal replication activity and the known tooling used for this technique, the attacker utilized <strong>Mimikatz</strong> to perform the rogue Domain Controller registration and manipulate Active Directory data.
+      </p>
+
+      <p>Therefore, the tool used by the attacker was <strong>Mimikatz</strong>.</p>
+    </div>
+
+    <div class="task">
+      <h3>Q7:</h3>
+
+      <p><strong>What's the first command used by the attacker for enabling RDP on remote machines for lateral movement?</strong></p>
+
+      <p>
+        To identify the command used by the attacker to enable <strong>Remote Desktop Protocol (RDP)</strong> for lateral movement, I investigated <strong>registry modification activity</strong> related to RDP configuration.
+      </p>
+
+      <p>In Windows systems, the ability to allow or deny RDP connections is controlled by the following registry key:</p>
+
+      <p><code>HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\fDenyTSConnections</code></p>
+
+      <p>This value determines whether Remote Desktop connections are allowed:</p>
+
+      <ul>
+        <li><strong><code>1</code></strong> → RDP is <strong>disabled</strong></li>
+        <li><strong><code>0</code></strong> → RDP is <strong>enabled</strong></li>
+      </ul>
+
+      <p>
+        I filtered the logs for registry activity involving this key to identify when it was modified. The results revealed a command executed by the attacker that modified this registry value.
+      </p>
+
+      <p>The command observed was:</p>
+
+      <pre><code>reg add HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server /v fDenyTSConnections /t REG_DWORD /d 0 /f</code></pre>
+
+      <p>
+        The parameter <strong><code>/d 0</code></strong> indicates that the registry value was changed to <strong>enable RDP connections</strong>.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/8.png" alt="RDP enable command">
+        <figcaption>Registry modification command used to enable RDP on remote machines</figcaption>
+      </figure>
+
+      <p>
+        By modifying this setting, the attacker enabled Remote Desktop access on the system, allowing them to <strong>remotely access compromised machines and perform lateral movement within the environment</strong>. Enabling RDP is a common post-exploitation technique because it provides attackers with <strong>interactive remote access while blending in with legitimate administrative activity</strong>.
+      </p>
+    </div>
+
+    <div class="task">
+      <h3>Q8:</h3>
+
+      <p><strong>What's the file name created by the attacker after compressing confidential files?</strong></p>
+
+      <p>
+        During the earlier stages of the investigation, specifically in <strong>Question 3</strong>, I identified suspicious <strong>file creation events (Event ID 11)</strong> that suggested the attacker was staging data.
+      </p>
+
+      <pre><code>index=shadowroast event.code=11 winlog.event_data.TargetFilename="*.txt" OR winlog.event_data.TargetFilename="*.zip"
+| stats count by winlog.event_data.TargetFilename, winlog.event_data.Image, winlog.computer_name, _time
+| sort _time</code></pre>
+
+      <p>
+        With that command, we can see the malicious actor created <code>CrashDump.zip</code> which was utilized for his malicious purposes.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/shadowroast/9.png" alt="CrashDump.zip creation">
+        <figcaption>Creation of CrashDump.zip after confidential files were compressed</figcaption>
+      </figure>
+
+      <p>
+        The results revealed that the attacker created the archive file <strong><code>CrashDump.zip</code></strong>. The creation of this archive strongly suggests that the attacker compressed confidential data into a single file for easier transfer or exfiltration from the environment.
+      </p>
+
+      <ul>
+        <li><strong>File Created:</strong> <code>CrashDump.zip</code></li>
+        <li><strong>Event Type:</strong> File creation (Event ID 11)</li>
+      </ul>
+    </div>
+
+    <hr class="section-divider">
+
+    <h2>Timeline:</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Time (UTC)</th>
+          <th>Host</th>
+          <th>User</th>
+          <th>Activity</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>2024-08-06 01:07:34.837</strong></td>
+          <td>Office-PC.CORPNET.local</td>
+          <td>sanderson</td>
+          <td>Initial Execution</td>
+          <td><code>AdobeUpdater.exe</code> executed from the user's <strong>Downloads directory</strong>, likely masquerading as a legitimate updater to gain initial access.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 01:07:35</strong></td>
+          <td>Office-PC.CORPNET.local</td>
+          <td>sanderson</td>
+          <td>Process Chain</td>
+          <td><code>AdobeUpdater.exe</code> spawned <strong>cmd.exe</strong>, which subsequently launched <strong>PowerShell with <code>-ep bypass</code></strong>, indicating an attempt to bypass PowerShell execution policies.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 01:08:xx</strong></td>
+          <td>Office-PC.CORPNET.local</td>
+          <td>sanderson</td>
+          <td>Persistence</td>
+          <td>The malware created a <strong>registry Run key <code>wyW5PZyF</code></strong> to maintain persistence on system startup.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 01:10:45.053</strong></td>
+          <td>Office-PC.CORPNET.local</td>
+          <td>sanderson</td>
+          <td>Credential Harvesting</td>
+          <td>PowerShell executed <strong><code>BackupUtility.exe</code> (Rubeus)</strong> with the argument <code>asreproast /format:hashcat</code>, indicating an <strong>AS-REP Roasting attack</strong> against Active Directory accounts.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 01:13:28.285</strong></td>
+          <td>Office-PC.CORPNET.local/File Server</td>
+          <td>tcooper</td>
+          <td>Credential Abuse</td>
+          <td>Successful authentication (<strong>Event ID 4624</strong>) for the user <strong>tcooper</strong>, approximately <strong>3 minutes after the AS-REP roasting attack</strong>, suggesting the attacker cracked the credentials offline.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 ~01:14–01:19</strong></td>
+          <td>Office-PC.CORPNET.local/File Server</td>
+          <td>tcooper</td>
+          <td>Post-Exploitation</td>
+          <td>Multiple successful logons using <strong>tcooper</strong>, indicating continued attacker activity using the compromised account.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 ~01:20</strong></td>
+          <td>CORPNET Environment</td>
+          <td>Attacker</td>
+          <td>Active Directory Manipulation</td>
+          <td>Suspicious <strong>AD replication events (Event ID 4929)</strong> from <code>Office-PC.CORPNET.local</code>, indicating a <strong>DCShadow attack</strong> using <strong>Mimikatz</strong> to register a rogue Domain Controller.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 ~01:21:04.278</strong></td>
+          <td>FileServer.CORPNET.local</td>
+          <td>CORPNET\tcooper</td>
+          <td>Lateral Movement</td>
+          <td>Evidence of activity on a new host suggests the attacker moved laterally using the compromised credentials.</td>
+        </tr>
+        <tr>
+          <td><strong>2024-08-06 ~01:21</strong></td>
+          <td>FileServer.CORPNET.local</td>
+          <td>CORPNET\tcooper</td>
+          <td>Data Staging</td>
+          <td>The attacker created the archive <strong><code>CrashDump.zip</code></strong>, likely compressing sensitive files for potential exfiltration.</td>
+        </tr>
+      </tbody>
+    </table>
+
+  </main>
+
+</div>
+
+</body>
+</html>
