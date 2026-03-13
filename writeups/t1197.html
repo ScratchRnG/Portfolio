@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>T1197 Write-up | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>T1197 Write-up</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Scenario:</h2>
+    <p>
+      Adversaries can exploit BITS (Background Intelligent Transfer Service) jobs to persistently execute code and carry out various background tasks. BITS is a COM-exposed, low-bandwidth file transfer mechanism used by applications such as updaters and messengers, allowing them to operate in the background without interfering with other networked applications.
+    </p>
+
+    <p>
+      In this incident, an employee received multiple alerts from Windows Defender indicating the presence of malicious files on their PC. As you arrive at the scene, your goal is to use SIEM to analyze the event logs from the suspicious machine and determine the nature of the events.
+    </p>
+
+    <hr class="section-divider">
+
+    <h3>Executive Summary</h3>
+    <p>
+      This investigation analyzed Windows event logs and Microsoft Defender alerts to determine the cause of malware detections on host <strong>WIN-2FOSVI0LSCF</strong>. Analysis revealed that the attacker deployed a <strong>Meterpreter backdoor generated using the Metasploit Framework</strong>, which triggered multiple Defender detections (Event ID 1116). The adversary attempted to establish persistence by creating a malicious scheduled task named <strong><code>eviltask</code></strong>. Further investigation identified the abuse of the legitimate Windows utility <strong><code>bitsadmin.exe</code></strong>, a known <strong>LOLBAS</strong>, to create <strong>BITS jobs</strong> that downloaded a malicious payload from the attacker-controlled server <strong>192.168.190.136</strong>. Process creation logs show that <strong>PowerShell spawned <code>bitsadmin.exe</code></strong>, with the first execution occurring on <strong>2023-07-31 at 17:39:45.935</strong>. BITS operational logs confirm that the payload <strong><code>test.exe</code></strong> was successfully downloaded, with the transfer completing at <strong>2023-07-31 18:16:48.207</strong>. Overall, the incident demonstrates how attackers can abuse native Windows services such as <strong>BITS</strong> to stealthily transfer malware, maintain persistence, and evade traditional detection mechanisms.
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- Q1 -->
+    <div class="task">
+      <h3>Q1:</h3>
+
+      <p><strong>What is the framework used to create the backdoors?</strong></p>
+
+      <p>
+        To identify the framework used to generate the backdoors, I began by analyzing several different event types within the dataset. My initial approach focused on identifying suspicious processes or behaviors that could indicate the framework responsible for the payload generation.
+      </p>
+
+      <p>
+        I first reviewed <strong>process creation events</strong>, <strong>network connection logs</strong>, and <strong>PowerShell script logging events</strong> in an attempt to identify unusual processes or command execution that might reveal the framework used by the attacker. However, these event sources did not provide any direct indicators.
+      </p>
+
+      <p>
+        Since the initial approach did not yield results, I pivoted to examining <strong>Microsoft Defender Antivirus detection events</strong>, specifically <strong>Event ID 1116</strong>, which logs malware detections.
+      </p>
+
+      <p>
+        Filtering for these events revealed multiple detections occurring between <strong>July 31, 2023, 6:01:30 PM and 6:28:03 PM</strong> on the host <strong>WIN-2FOSVI0LSCF</strong> (IP address <strong>192.168.19.129</strong>). The detections identified several files associated with <strong>Meterpreter</strong>, a well-known payload used in offensive security frameworks.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/t1197/1.png" alt="T1197 Image 1">
+        <figcaption></figcaption>
+      </figure>
+
+      <figure class="image-block">
+        <img src="../assets/images/t1197/2.png" alt="T1197 Image 2">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        The presence of <strong>Meterpreter</strong> strongly indicates that the attacker generated the backdoors using the <strong>Metasploit Framework</strong>, as Meterpreter is one of its primary post-exploitation payloads.
+      </p>
+    </div>
+
+    <!-- Q2 -->
+    <div class="task">
+      <h3>Q2:</h3>
+
+      <p><strong>What is the name of the scheduled task that the attacker tried to create?</strong></p>
+
+      <p>
+        To identify the scheduled task created by the attacker, I reviewed the <strong>Microsoft Defender Antivirus detection events (Event ID 1116)</strong> discovered in Question 1.
+      </p>
+
+      <p>
+        Within the Defender alert details, the <strong>Path</strong> field provides information about the malicious artifacts that were detected and blocked. The alert references multiple persistence-related artifacts, including registry entries and a scheduled task file.
+      </p>
+
+      <p>
+        The log specifically shows the following entry:
+      </p>
+
+      <pre><code>taskscheduler:_C:\Windows\System32\Tasks\eviltask</code></pre>
+
+      <p>
+        This indicates that the attacker attempted to create a scheduled task named <strong><code>eviltask</code></strong> located in the Windows Task Scheduler directory.
+      </p>
+
+      <p>
+        Scheduled tasks are commonly used by attackers as a <strong>persistence mechanism</strong>, allowing malicious payloads (such as a Meterpreter backdoor) to execute automatically at scheduled intervals or system startup.
+      </p>
+    </div>
+
+    <!-- Q3 -->
+    <div class="task">
+      <h3>Q3:</h3>
+
+      <p><strong>What is the <code>LOLBAS</code> used by the malicious actor to move the backdoors to the targeted machine?</strong></p>
+
+      <p>
+        To identify the LOLBAS used by the attacker, I analyzed activity related to <strong>MITRE ATT&amp;CK technique T1197 – BITS Jobs</strong>, which describes how adversaries abuse the <strong>Background Intelligent Transfer Service (BITS)</strong> to transfer malicious payloads and maintain persistence.
+      </p>
+
+      <p>
+        Reviewing the detection guidance for T1197 shows that attackers commonly leverage tools such as <strong><code>bitsadmin.exe</code></strong>, PowerShell BITS cmdlets, or COM objects to create and manage BITS jobs that download or move files across systems.
+      </p>
+
+      <p>
+        Searching the environment for activity related to these binaries revealed numerous executions of <strong><code>bitsadmin.exe</code></strong>, indicating that the attacker used this native Windows utility to transfer the backdoor payloads to the target machine.
+      </p>
+
+      <p>
+        Because <strong><code>bitsadmin.exe</code></strong> is a legitimate Windows binary that can be abused for malicious purposes, it is classified as a <strong>LOLBAS</strong> tool.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/t1197/3.png" alt="T1197 Image 3">
+        <figcaption></figcaption>
+      </figure>
+    </div>
+
+    <!-- Q4 -->
+    <div class="task">
+      <h3>Q4:</h3>
+
+      <p><strong>When was the first attempt made by the attacker to execute the <code>LOLBAS</code>?</strong></p>
+
+      <p>
+        To determine when the attacker first executed the LOLBAS tool <strong><code>bitsadmin.exe</code></strong>, I analyzed <strong>process creation events (Event ID 4688)</strong> within the dataset.
+      </p>
+
+      <p>
+        I executed the following query to identify executions of <code>bitsadmin.exe</code> and the processes responsible for launching it:
+      </p>
+
+      <pre><code>index="mitre-t1197" event.code=4688 bitsadmin.exe
+| stats count by winlog.event_data.NewProcessName, winlog.event_data.ParentProcessName, _time
+| sort _time</code></pre>
+
+      <p>
+        This query lists all instances where <strong><code>bitsadmin.exe</code></strong> was executed, along with the parent process and associated timestamps.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/t1197/4.png" alt="T1197 Image 4">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        The results show that <strong>PowerShell (<code>powershell.exe</code>)</strong> was responsible for spawning <code>bitsadmin.exe</code>, indicating that the attacker used PowerShell to initiate the malicious BITS transfer activity.
+      </p>
+
+      <p>
+        From the results, the <strong>earliest recorded execution</strong> occurred at: <strong><code>2023-07-31 17:39:45.935</code></strong>
+      </p>
+
+      <p>
+        Therefore, the first attempt made by the attacker to execute the LOLBAS occurred at <strong>2023-07-31 17:39:45.935 (UTC)</strong>.
+      </p>
+
+      <pre><code>The lab requires the timestamp to be provided in **24-hour format**, which may cause incorrect submissions if entered using a 12-hour format.</code></pre>
+    </div>
+
+    <!-- Q5 -->
+    <div class="task">
+      <h3>Q5:</h3>
+
+      <p><strong>What is the IP address of the attacker?</strong></p>
+
+      <p>
+        To determine the attacker’s IP address, I continued reviewing events associated with <strong>BITS job activity</strong> related to <strong>MITRE ATT&amp;CK technique T1197</strong>.
+      </p>
+
+      <p>
+        While examining the <strong>Microsoft-Windows-Bits-Client/Operational logs</strong>, I identified an event indicating that a BITS transfer job had been created to download a malicious payload. The event message states:
+      </p>
+
+      <pre><code>BITS started the hacking transfer job that is associated with the http://192.168.190.136/test.exe URL.</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/t1197/5.png" alt="T1197 Image 5">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        This log entry reveals that the system attempted to retrieve a file named <strong><code>test.exe</code></strong> from a remote server using BITS. Because the payload is being downloaded from this remote location, the server hosting the file represents the attacker-controlled infrastructure.
+      </p>
+
+      <p>
+        From the URL shown in the log:
+      </p>
+
+      <pre><code>http://192.168.190.136/test.exe</code></pre>
+
+      <p>
+        we can extract the attacker’s IP address.
+      </p>
+
+      <h4>Observed Attack Flow</h4>
+      <ol>
+        <li>The attacker creates a <strong>BITS job</strong> using <code>bitsadmin.exe</code>.</li>
+        <li>The <strong>BITS service downloads</strong> the malicious payload (<code>test.exe</code>) from the remote host.</li>
+        <li>The payload is later <strong>executed on the compromised system</strong>.</li>
+      </ol>
+    </div>
+
+    <!-- Q6 -->
+    <div class="task">
+      <h3>Q6:</h3>
+
+      <p><strong>When was the most recent file downloaded by the attacker to the targeted machine?</strong></p>
+
+      <p>
+        To determine when the attacker most recently downloaded a file to the target machine, I analyzed <strong>BITS operational logs</strong> related to the malicious transfer job identified in the previous question.
+      </p>
+
+      <p>
+        Earlier in the investigation, we observed that the attacker created a <strong>BITS job</strong> to download the payload:
+      </p>
+
+      <pre><code>http://192.168.190.136/test.exe</code></pre>
+
+      <p>
+        To identify when the download completed, I examined the event indicating that the BITS transfer job had finished. The log message states:
+      </p>
+
+      <p>
+        BITS stopped transferring the BITS Transfer job that is associated with the <code>http://192.168.190.136/test.exe</code> URL. The status code is 0x0.
+      </p>
+
+      <p>
+        The <strong>status code <code>0x0</code></strong> indicates that the operation completed successfully, confirming that the file was fully downloaded to the system.
+      </p>
+
+      <p>
+        From the event details, the associated timestamp is: <strong>2023-07-31 18:16:48.207</strong>
+      </p>
+
+      <p>
+        Therefore, the most recent file downloaded by the attacker to the targeted machine occurred at: <strong>2023-07-31 18:16:48.207</strong>
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/t1197/6.png" alt="T1197 Image 6">
+        <figcaption></figcaption>
+      </figure>
+
+      <h4>Observed Download Process:</h4>
+      <ol>
+        <li>The attacker creates a <strong>BITS job</strong> using <code>bitsadmin.exe</code>.</li>
+        <li>The BITS service downloads the payload from the attacker-controlled server.</li>
+        <li>The transfer completes successfully (<code>0x0</code> status code).</li>
+        <li>A <strong>BITS stop event</strong> is logged, indicating the download has finished.</li>
+      </ol>
+    </div>
+
+    <hr class="section-divider">
+
+<!-- IOC TABLE -->
+<div class="task">
+  <h3>Indicators of Compromise (IOC)</h3>
+
+  <table class="ioc-table">
+    <thead>
+      <tr>
+        <th>IOC Type</th>
+        <th>Indicator</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr>
+        <td>Hostname</td>
+        <td>WIN-2FOSVI0LSCF</td>
+        <td>Compromised host where malicious activity occurred</td>
+      </tr>
+
+      <tr>
+        <td>Internal IP</td>
+        <td>192.168.19.129</td>
+        <td>IP address assigned to the compromised workstation</td>
+      </tr>
+
+      <tr>
+        <td>Attacker IP</td>
+        <td>192.168.190.136</td>
+        <td>Remote server hosting the malicious payload</td>
+      </tr>
+
+      <tr>
+        <td>Malicious URL</td>
+        <td>
+          <a href="http://192.168.190.136/test.exe">
+            http://192.168.190.136/test.exe
+          </a>
+        </td>
+        <td>URL used to download the attacker payload</td>
+      </tr>
+
+      <tr>
+        <td>Malicious File</td>
+        <td>test.exe</td>
+        <td>Payload downloaded to the victim machine</td>
+      </tr>
+
+      <tr>
+        <td>Malware Family</td>
+        <td>Meterpreter</td>
+        <td>Backdoor payload detected by Windows Defender</td>
+      </tr>
+
+      <tr>
+        <td>Framework</td>
+        <td>Metasploit Framework</td>
+        <td>Offensive framework used to generate the backdoor payload</td>
+      </tr>
+
+      <tr>
+        <td>LOLBAS Tool</td>
+        <td>bitsadmin.exe</td>
+        <td>Native Windows tool abused to download malicious payload</td>
+      </tr>
+
+      <tr>
+        <td>Parent Process</td>
+        <td>powershell.exe</td>
+        <td>PowerShell spawned bitsadmin to execute the BITS job</td>
+      </tr>
+
+      <tr>
+        <td>Persistence Mechanism</td>
+        <td>Scheduled Task | eviltask</td>
+        <td>Task created to maintain persistence on the host</td>
+      </tr>
+
+      <tr>
+        <td>Scheduled Task Path</td>
+        <td>C:\Windows\System32\Tasks\eviltask</td>
+        <td>File path of the malicious scheduled task</td>
+      </tr>
+
+      <tr>
+        <td>Registry Key</td>
+        <td>
+          HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\eviltask
+        </td>
+        <td>Task scheduler tree entry for the malicious task</td>
+      </tr>
+
+      <tr>
+        <td>First Execution Time</td>
+        <td>2023-07-31 17:39:45.935</td>
+        <td>First observed execution of bitsadmin by attacker</td>
+      </tr>
+
+      <tr>
+        <td>Successful Download Time</td>
+        <td>2023-07-31 18:16:48.207</td>
+        <td>Timestamp when malicious payload finished downloading</td>
+      </tr>
+    </tbody>
+
+  </table>
+</div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
