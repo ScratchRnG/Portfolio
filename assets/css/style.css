@@ -1133,13 +1133,56 @@ Image block
   object-fit: contain;
 }
 
-/* ===============================
-Section seperator for AS-REP
-================================ */
+/* ============================
+Secion seperator for AS-REP
+========================= */
 
 .section-divider {
   border: none;
   height: 1px;
   background: linear-gradient(to right, transparent, #444, transparent);
   margin: 2.5rem 0;
+}
+
+/* IOC Table Styling */
+
+.ioc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 0.95rem;
+  table-layout: fixed;
+}
+
+.ioc-table th,
+.ioc-table td {
+  padding: 12px 14px;
+  border: 1px solid #374151;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+  color: #e5e7eb;
+}
+
+.ioc-table th {
+  background-color: #1e293b;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.ioc-table tr:nth-child(even) {
+  background-color: #1f2937;
+}
+
+.ioc-table tr:nth-child(odd) {
+  background-color: #111827;
+}
+
+.ioc-table tr:hover {
+  background-color: #2d3748;
+}
+
+.ioc-table td:first-child {
+  font-weight: 600;
+  width: 180px;
 }
