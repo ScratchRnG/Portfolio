@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sherlock: REvil Challenge | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Sherlock: REvil Challenge</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <!-- TASK 1 -->
+    <div class="task">
+      <h3>Q1:</h3>
+
+      <p>To begin your investigation, can you identify the filename of the note that the ransomware left behind?</p>
+
+      <p>
+        To identify the filename of the ransomware note left behind on the compromised system, I began by analyzing <strong>file creation events</strong> within the dataset. In Windows logging, <strong>Event ID 11</strong> corresponds to file creation activity, making it a reliable method for identifying files dropped by malicious processes.
+      </p>
+
+      <p>Using this knowledge, I filtered the logs for file creation events with the following query:</p>
+
+      <pre><code>event.code:11</code></pre>
+
+      <p>
+        This returned a large number of results, many of which were legitimate system operations. To reduce noise and focus on suspicious activity, I excluded common benign system processes, specifically <strong>svchost.exe</strong>, which frequently generates file creation events during normal system behavior.
+      </p>
+
+      <p>The refined query used was:</p>
+
+      <pre><code>event.code:11 and not winlog.event_data.Image:"C:\\Windows\\System32\\svchost.exe"</code></pre>
+
+      <p>After applying this filter, several suspicious entries appeared in the results.</p>
+
+      <figure class="image-block">
+        <img src="../assets/images/revil/1.png" alt="File creation results showing ransomware note">
+        <figcaption>File creation results showing ransomware note</figcaption>
+      </figure>
+
+      <p>
+        From the output, we observe that the process <strong><code>Facebook assistant.exe</code></strong> created a file named: <code>5uizv5660t-readme.txt</code>
+      </p>
+
+      <p>This activity occurred on the host <strong>192.168.19.129</strong>.</p>
+
+      <p>
+        Based on this evidence, it is highly likely that <strong><code>Facebook assistant.exe</code></strong> is the malicious executable responsible for the ransomware activity and for dropping the ransom note on the compromised system.
+      </p>
+
+      <p>-----</p>
+    </div>
+
+    <!-- TASK 2 -->
+    <div class="task">
+      <h3>Q2:</h3>
+
+      <p>After identifying the ransom note, the next step is to pinpoint the source. What's the process ID of the ransomware that's likely involved</p>
+
+      <p>
+        After identifying the ransom note created by <strong><code>Facebook assistant.exe</code></strong>, the next step was to determine which <strong>process instance</strong> generated the file. This can be accomplished by reviewing the <strong>Process ID (PID)</strong> associated with the file creation event.
+      </p>
+
+      <p>
+        Since the ransom note was discovered through <strong>Event ID 11 (File Creation)</strong> logs, the same event contains the <strong><code>winlog.event_data.ProcessId</code></strong> field, which identifies the process responsible for creating the file.
+      </p>
+
+      <p>
+        To determine the PID, I added the <strong><code>winlog.event_data.ProcessId</code></strong> field to the results table while reviewing the file creation events associated with the ransom note.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/revil/2.png" alt="Process ID associated with the ransomware note">
+        <figcaption>Process ID associated with the ransomware note</figcaption>
+      </figure>
+
+      <p>
+        From the results, we can see that the file <strong><code>5uizv5660t-readme.txt</code></strong> was created by the process <strong><code>Facebook assistant.exe</code></strong>, which is associated with the following processID: <strong>5348</strong>.
+      </p>
+
+      <p>-----</p>
+    </div>
+
+    <!-- TASK 3 -->
+    <div class="task">
+      <h3>Q3:</h3>
+
+      <p>Having determined the ransomware's process ID, the next logical step is to locate its origin. Where can we find the ransomware's executable file?</p>
+
+      <p>
+        From the previously observed file creation events, we can already see the executable path associated with the ransomware process. The logs show that the suspicious executable <strong><code>facebook assistant.exe</code></strong> was executed from the following directory:
+      </p>
+
+      <pre><code>C:\Users\Administrator\Downloads\facebook assistant.exe</code></pre>
+
+      <p>
+        To further investigate the activity of this process, I pivoted on the identified <strong>Process ID (5348)</strong> to review all events generated by the same process. This was done using the following query:
+      </p>
+
+      <pre><code>winlog.event_data.ProcessId:5348</code></pre>
+
+      <p>This query allows us to identify <strong>additional behaviors and actions</strong> performed by the ransomware process.</p>
+
+      <figure class="image-block">
+        <img src="../assets/images/revil/3.png" alt="Events associated with Process ID 5348">
+        <figcaption>Events associated with Process ID 5348</figcaption>
+      </figure>
+
+      <p>By adding the <strong><code>event.code</code></strong> field to the results, we can observe multiple types of activity associated with the process, including:</p>
+
+      <ul>
+        <li><strong>Event ID 1</strong> – Process creation</li>
+        <li><strong>Event ID 7</strong> – DLL loading</li>
+        <li><strong>Event ID 13</strong> – Registry value modifications</li>
+      </ul>
+
+      <p>
+        These events indicate that the executable was actively interacting with the system by spawning processes, loading libraries, and modifying registry values which is behavior commonly associated with ransomware execution and system modification.
+      </p>
+
+      <p>----</p>
+    </div>
+
+    <!-- TASK 4 -->
+    <div class="task">
+      <h3>Q4:</h3>
+
+      <p>Now that you've pinpointed the ransomware's executable location, let's dig deeper. It's a common tactic for ransomware to disrupt system recovery methods. Can you identify the command that was used for this purpose?</p>
+
+      <p>
+        After identifying the ransomware executable <strong><code>facebook assistant.exe</code></strong>, the next step was to analyze the <strong>child processes spawned by this executable</strong>.
+      </p>
+
+      <p>
+        To investigate this behavior, I searched for events where the ransomware executable appeared as the <strong>ParentImage</strong>, which allows us to identify processes that were spawned by the malicious executable.
+      </p>
+
+      <p>This pivot revealed an interesting result: the ransomware created a <strong>PowerShell process</strong>:</p>
+
+      <figure class="image-block">
+        <img src="../assets/images/revil/4.png" alt="PowerShell child process spawned by the ransomware">
+        <figcaption>PowerShell child process spawned by the ransomware</figcaption>
+      </figure>
+
+      <p>
+        Upon reviewing the <strong>CommandLine</strong> field associated with this process, we can observe an <strong>obfuscated PowerShell command</strong>, which immediately raises suspicion. Obfuscation is frequently used by attackers to evade detection and make manual analysis more difficult.
+      </p>
+
+      <p>
+        To better understand the command's functionality, I copied the obfuscated string and <strong>deobfuscated it using CyberChef</strong>, which revealed the following command:
+      </p>
+
+      <pre><code>Get-WmiObject Win32_Shadowcopy | ForEach-Object {$_.Delete();}</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/revil/5.png" alt="Deobfuscated PowerShell command in CyberChef">
+        <figcaption>Deobfuscated PowerShell command in CyberChef</figcaption>
+      </figure>
+
+      <p>From the above, we can observe the following:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Part</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Get-WmiObject Win32_Shadowcopy</code></td>
+            <td>Queries WMI for all Volume Shadow Copies (VSS snapshots)</td>
+          </tr>
+          <tr>
+            <td><code>|</code></td>
+            <td>Pipes output into the next command</td>
+          </tr>
+          <tr>
+            <td><code>ForEach-Object</code></td>
+            <td>Loops through each shadow copy</td>
+          </tr>
+          <tr>
+            <td><code>{ $_.Delete(); }</code></td>
+            <td>Deletes each shadow copy</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>
+        Deleting shadow copies prevents <strong>system recovery and forensic rollback</strong>. This behavior is extremely common in: <strong>Ransomware</strong>, , <strong>Destructive malware</strong>, and <strong>Post-exploitation cleanup</strong>
+      </p>
+
+      <p>Attackers remove VSS so victims <strong>cannot restore files from snapshots</strong>.</p>
+
+      <p>---</p>
+    </div>
+
+    <!-- TASK 5 -->
+    <div class="task">
+      <h3>Q5:</h3>
+
+      <p>As we trace the ransomware's steps, a deeper verification is needed. Can you provide the sha256 hash of the ransomware's executable to cross-check with known malicious signatures?</p>
+
+      <p>
+        To further verify the malicious executable, the next step was to retrieve the <strong>hash</strong> of the ransomware file. Hash values are commonly used in threat intelligence to uniquely identify malware samples and compare them against known malicious signatures in databases.
+      </p>
+
+      <p>To locate the hash value, I examined the <strong>Sysmon process creation event</strong> where the ransomware executable appears as the <strong>Image (process)</strong>:</p>
+
+      <pre><code>C:\Users\Administrator\Downloads\facebook assistant.exe</code></pre>
+
+      <p>
+        Within the event details, Sysmon provides a <strong>Hashes</strong> field which includes several different hash types such as <strong>SHA1, MD5, and SHA256</strong>.
+      </p>
+
+      <p>From the <strong>Hashes</strong> field, we can extract the <strong>SHA256 hash</strong> associated with the ransomware executable.</p>
+
+      <p><strong>Answer:</strong> <code>B8D7FB4488C0556385498271AB9FFFDF0EB38BB2A330265D9852E3A6288092AA</code></p>
+
+      <p>
+        This hash uniquely identifies the ransomware binary and can be used to correlate the sample with <strong>known REvil/Sodinokibi ransomware signatures or other threat intelligence sources</strong>.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/revil/6.png" alt="Sysmon hash details for the ransomware executable">
+        <figcaption>Sysmon hash details for the ransomware executable</figcaption>
+      </figure>
+
+      <p>----</p>
+    </div>
+
+    <!-- TASK 6 -->
+    <div class="task">
+      <h3>Q6:</h3>
+
+      <p>One crucial piece remains: identifying the attacker's communication channel. Can you leverage threat intelligence and known Indicators of Compromise (IoCs) to pinpoint the ransomware author's onion domain?</p>
+
+      <p>
+        After identifying the <strong>SHA256 hash of the ransomware executable</strong>, the next step was to leverage <strong>threat intelligence</strong> to gather additional indicators associated with the malware sample.
+      </p>
+
+      <p>To accomplish this, I submitted the ransomware's SHA256 hash to <strong>tria.ge</strong>, a malware analysis platform.</p>
+
+      <p>
+        After opening the analysis report, I reviewed the artifacts, focusing specifically on files dropped by the ransomware. Within the report, the <strong>ransom note content</strong> was available for inspection.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/revil/7.png" alt="tria.ge report showing ransom note with onion domain">
+        <figcaption>tria.ge report showing ransom note with onion domain</figcaption>
+      </figure>
+
+      <p>
+        Upon examining the ransom note, we can identify the <strong>Tor (.onion) domain</strong> provided by the ransomware operators. This domain is used by victims to access the attacker’s payment portal and obtain instructions for decrypting their files after paying the ransom.
+      </p>
+
+      <p>The onion domain identified in the ransom note is:</p>
+
+      <pre><code>aplebzu47wgazapdqks6vrcv6zcnjppkbxbr6wketf56nf6aq2nmyoyd.onion</code></pre>
+
+      <p>
+        This domain serves as the <strong>communication channel between the victim and the ransomware operators</strong>, allowing victims to negotiate payment and retrieve decryption keys.
+      </p>
+    </div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
