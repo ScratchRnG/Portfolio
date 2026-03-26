@@ -13,19 +13,64 @@
 
   <!-- Header -->
   <header class="argus-header">
-    <h1>Sherlock: REvil Challenge</h1>
+    <h1>REvil Challenge</h1>
     <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
   </header>
 
   <!-- Main Content -->
   <main class="argus-content">
 
+<!-- SCENARIO -->
+<section class="argus-section">
+  <h2>Scenario</h2>
+
+  <p>
+    You are a Threat Hunter working for a cybersecurity consulting firm. One of your clients has recently been affected by a ransomware attack that resulted in the encryption of multiple employee machines. Affected users reported the presence of a ransom note on their desktop along with a modified desktop background.
+  </p>
+
+  <p>
+    As part of the investigation, you have been provided with access to a Splunk SIEM environment containing Sysmon event logs from one of the compromised systems. Your objective is to analyze the available telemetry and extract as much information as possible to identify the ransomware activity, determine its origin, and uncover key indicators of compromise.
+  </p>
+</section>
+
+   <!-- EXECUTIVE SUMMARY -->
+    <section class="argus-section">
+      <h2>Executive Summary</h2>
+
+      <p>
+        This investigation analyzed endpoint logs to identify and assess a ransomware infection on a compromised Windows host (192.168.19.129). The analysis began by reviewing Sysmon Event ID 11 (File Creation) logs, which revealed that a suspicious executable, <strong>Facebook assistant.exe</strong>, created a ransom note named <strong>5uizv5660t-readme.txt</strong>. This activity strongly indicated ransomware execution.
+      </p>
+
+      <p>
+        Further analysis identified the responsible process ID (PID 5348) and confirmed that the executable originated from the user’s Downloads directory, suggesting initial infection likely occurred through a downloaded file. Pivoting on this process uncovered additional malicious behaviors, including process spawning, DLL loading, and registry modifications, a common indicators of ransomware activity.
+      </p>
+
+      <p>
+        A key discovery was an obfuscated PowerShell command executed by the ransomware, which, once deobfuscated, was found to delete Volume Shadow Copies (VSS). This action prevents system recovery and is a well-known ransomware tactic to ensure victims cannot restore encrypted data.
+      </p>
+
+      <p>
+        To validate the threat, the SHA256 hash of the executable was extracted:<br>
+        <code>B8D7FB4488C0556385498271AB9FFFDF0EB38BB2A330265D9852E3A6288092AA</code>,
+        enabling correlation with known malware signatures and threat intelligence sources.
+      </p>
+
+      <p>
+        Finally, external analysis using malware intelligence platforms revealed the attacker’s Tor (.onion) domain, which serves as the communication and payment portal for victims:<br>
+        <code>aplebzu47wgazapdqks6vrcv6zcnjppkbxbr6wketf56nf6aq2nmyoyd.onion</code>
+      </p>
+
+      <p>
+        Overall, the findings confirm a ransomware infection involving execution of a malicious user-downloaded file, system modification for persistence and impact, and deliberate disruption of recovery mechanisms, aligning with typical ransomware attack patterns.
+      </p>
+    </section>
+
     <!-- TASK 1 -->
     <div class="task">
       <h3>Q1:</h3>
 
       <p>To begin your investigation, can you identify the filename of the note that the ransomware left behind?</p>
-
+      </p>
       <p>
         To identify the filename of the ransomware note left behind on the compromised system, I began by analyzing <strong>file creation events</strong> within the dataset. In Windows logging, <strong>Event ID 11</strong> corresponds to file creation activity, making it a reliable method for identifying files dropped by malicious processes.
       </p>
@@ -66,7 +111,7 @@
     <div class="task">
       <h3>Q2:</h3>
 
-      <p>After identifying the ransom note, the next step is to pinpoint the source. What's the process ID of the ransomware that's likely involved</p>
+      <p>After identifying the ransom note, the next step is to pinpoint the source. What's the process ID of the ransomware that's likely involved?</p>
 
       <p>
         After identifying the ransom note created by <strong><code>Facebook assistant.exe</code></strong>, the next step was to determine which <strong>process instance</strong> generated the file. This can be accomplished by reviewing the <strong>Process ID (PID)</strong> associated with the file creation event.
@@ -273,6 +318,63 @@
         This domain serves as the <strong>communication channel between the victim and the ransomware operators</strong>, allowing victims to negotiate payment and retrieve decryption keys.
       </p>
     </div>
+
+    <!-- IOC TABLE -->
+    <section class="argus-section">
+      <h2>Indicators of Compromise (IOCs)</h2>
+
+      <table class="ioc-table">
+        <thead>
+          <tr>
+            <th>Indicator Type</th>
+            <th>Indicator Value</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>File Name</td>
+            <td><code>Facebook assistant.exe</code></td>
+            <td>Malicious ransomware executable</td>
+          </tr>
+          <tr>
+            <td>File Path</td>
+            <td><code>C:\Users\Administrator\Downloads\facebook assistant.exe</code></td>
+            <td>Execution location of ransomware</td>
+          </tr>
+          <tr>
+            <td>Ransom Note</td>
+            <td><code>5uizv5660t-readme.txt</code></td>
+            <td>File dropped by ransomware</td>
+          </tr>
+          <tr>
+            <td>Process ID</td>
+            <td><code>5348</code></td>
+            <td>Associated ransomware process</td>
+          </tr>
+          <tr>
+            <td>Host IP</td>
+            <td><code>192.168.19.129</code></td>
+            <td>Compromised system</td>
+          </tr>
+          <tr>
+            <td>SHA256 Hash</td>
+            <td><code>B8D7FB4488C0556385498271AB9FFFDF0EB38BB2A330265D9852E3A6288092AA</code></td>
+            <td>Unique identifier of malware sample</td>
+          </tr>
+          <tr>
+            <td>PowerShell Command</td>
+            <td><code>Get-WmiObject Win32_Shadowcopy | ForEach-Object {$_.Delete();}</code></td>
+            <td>Deletes Volume Shadow Copies (prevents recovery)</td>
+          </tr>
+          <tr>
+            <td>Onion Domain</td>
+            <td><code>aplebzu47wgazapdqks6vrcv6zcnjppkbxbr6wketf56nf6aq2nmyoyd.onion</code></td>
+            <td>Attacker communication/payment portal</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
 
   </main>
 
