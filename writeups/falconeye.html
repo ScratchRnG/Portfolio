@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FalconEye </title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>FalconEye</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Overview</h2>
+    <p>
+      As a SOC analyst, you aim to investigate a security breach in an Active Directory network using Splunk SIEM solution to uncover the attacker's steps and techniques while creating a timeline of their activities. The investigation begins with network enumeration to identify potential vulnerabilities. Using a specialized privilege escalation tool, the attacker exploited an unquoted service path vulnerability in a specific process.
+    </p>
+
+    <p>
+      Once the attacker had elevated access, the attacker launched a DCsync attack to extract sensitive data from the Active Directory domain controller, compromising user accounts. The attacker employed evasion techniques to avoid detection and utilized a pass-the-hash (pth) attack to gain unauthorized access to user accounts. Pivoting through the network, the attacker explored different systems and established persistence.
+    </p>
+
+    <p>
+      Throughout the investigation, tracking the attacker's activities and creating a comprehensive timeline is crucial. This will provide valuable insights into the attack and aid in identifying potential gaps in the network's security.
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- TASK 1 -->
+    <div class="task">
+      <h3>Q1:</h3>
+
+      <p><strong>What is the name of the compromised account?</strong></p>
+
+      <p>
+        To identify the compromised account, I analyzed authentication logs for evidence of <strong>Pass-the-Hash (PtH)</strong> activity. Specifically, I filtered for successful logons with <strong>Logon Type 9 (NewCredentials)</strong> in combination with the presence of <code>seclogo</code>, which is commonly associated with <code>runas /netonly</code> behavior:
+      </p>
+
+      <pre><code>index="folks" EventCode=4624 Logon_Type=9 seclogo    
+| table _time, host, Computer_Name, EventCode, user, TargetOutboundDomainName, TargetOutboundUserName, TargetUserName, Target_Domain, dest, process</code></pre>
+
+      <p>
+        This query returned multiple authentication events originating from <strong>CLIENT02</strong>, indicating suspicious credential usage.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/1.png" alt="Pass-the-Hash logon events in Splunk">
+        <figcaption>Pass-the-Hash activity showing Logon Type 9 events and outbound user mismatches</figcaption>
+      </figure>
+
+      <p>
+        Analysis of the returned fields reveals two important distinctions:
+      </p>
+
+      <ul>
+        <li><code>user</code> / <code>TargetUserName</code>: Represents the account executing the process locally</li>
+        <li><code>TargetOutboundUserName</code>: Represents the account being used for outbound authentication</li>
+      </ul>
+
+      <p>
+        The results show that the <strong>HelpDesk</strong> account is consistently initiating logons while attempting to authenticate as various outbound users. This mismatch between local and outbound identities is a strong indicator of <strong>Pass-the-Hash activity</strong>, where an attacker leverages a compromised account to authenticate to other systems without knowing the plaintext password.
+      </p>
+
+      <p>
+        Additional observations include:
+      </p>
+
+      <ul>
+        <li>The activity targets the domain <strong>Abdullah-work</strong></li>
+        <li>The events occur within the timeframe:
+          <ul>
+            <li><strong>2023-05-10 06:49:48</strong> (first observed logon)</li>
+            <li><strong>2023-05-10 07:15:17</strong> (last observed logon)</li>
+          </ul>
+        </li>
+      </ul>
+
+      <p>
+        Pass-the-Hash is a technique in which an attacker uses an <strong>NTLM hash</strong> instead of a plaintext password to authenticate to remote systems, enabling lateral movement within the environment.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 2 -->
+ <div class="task">
+      <h3>Q2:</h3>
+
+      <p><strong>What is the name of the compromised machine?</strong></p>
+
+      <p>
+        The compromised machine was identified through the authentication logs analyzed in <strong>Question 1</strong>. The query results consistently showed suspicious <strong>Pass-the-Hash (PtH)</strong> activity originating from a single host.
+      </p>
+
+      <p>
+        Specifically, all relevant logon events (Event ID 4624 with Logon Type 9) were associated with:
+      </p>
+
+      <pre><code> CLIENT02</code></pre>
+
+      <p>
+        This indicates that <strong>CLIENT02</strong> is the system from which the attacker executed the malicious authentication attempts using the compromised <code>HelpDesk</code> account.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 3 -->
+    <div class="task">
+      <h3>Q3:</h3>
+
+      <p><strong>What tool did the attacker use to enumerate the environment?</strong></p>
+
+      <p>
+        To identify the enumeration tool used by the attacker, I analyzed <strong>PowerShell Script Block Logging events (Event ID 4104)</strong> for suspicious activity. Given that <strong>BloodHound</strong> is a commonly used tool for Active Directory enumeration, I searched for related indicators within the logs:
+      </p>
+
+      <pre><code>index="folks" EventCode=4104 host="client02" *bloodhound*</code></pre>
+
+      <p>
+        This search revealed the execution of the following command:
+      </p>
+
+      <pre><code>Invoke-BloodHound -CollectionMethod DCOnly -NoSaveCache -RandomizeFilenames -EncryptZip</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/2.png" alt="BloodHound execution in PowerShell logs">
+        <figcaption>PowerShell Script Block Logging revealing Invoke-BloodHound execution</figcaption>
+      </figure>
+
+      <p>
+        This confirms that the attacker used <strong>BloodHound</strong> to enumerate the Active Directory environment.
+      </p>
+
+      <p>
+        The command demonstrates a <strong>stealth-oriented approach</strong>, as the attacker:
+      </p>
+
+      <ul>
+        <li>Limited data collection to <strong>Domain Controllers only</strong> (<code>DCOnly</code>) to minimize noise</li>
+        <li>Avoided writing cache files to disk (<code>NoSaveCache</code>) to reduce forensic artifacts</li>
+        <li>Randomized output filenames (<code>RandomizeFilenames</code>) to evade detection mechanisms</li>
+        <li>Encrypted the collected data (<code>EncryptZip</code>) to protect it during exfiltration</li>
+      </ul>
+
+      <p>
+        BloodHound is commonly leveraged by attackers to map <strong>Active Directory relationships</strong>, including:
+      </p>
+
+      <ul>
+        <li>User and group memberships</li>
+        <li>Access Control Lists (ACLs)</li>
+        <li>Domain trust relationships</li>
+        <li>Group Policy Objects (GPOs)</li>
+      </ul>
+
+      <p>
+        This data is then used to identify <strong>privilege escalation paths</strong> and facilitate lateral movement across the environment.
+      </p>
+
+      <p>
+        The activity was observed at:
+      </p>
+
+      <pre><code> 2023-05-10 03:28:41</code></pre>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 4 -->
+    <div class="task">
+      <h3>Q4:</h3>
+
+      <p><strong>The attacker used an Unquoted Service Path to escalate privileges. What is the name of the vulnerable service?</strong></p>
+
+      <p>
+        In Windows, services are configured with a <strong>binary path</strong> that specifies which executable should be launched. If this path:
+      </p>
+
+      <ul>
+        <li>Contains <strong>spaces</strong></li>
+        <li>AND is <strong>not enclosed in quotation marks</strong></li>
+      </ul>
+
+      <p>
+        Windows may incorrectly parse the path and attempt to execute unintended binaries.
+      </p>
+
+      <p>
+        Consider the following unquoted service path:
+      </p>
+
+      <pre><code>C:\Program Files\My Service\service.exe</code></pre>
+
+      <p>(space between <code>My</code> and <code>Service</code>)</p>
+
+      <p>
+        Because it is not wrapped in quotes, Windows may interpret and attempt execution in the following order:
+      </p>
+
+      <ol>
+        <li><code>C:\Program.exe</code></li>
+        <li><code>C:\Program Files\My.exe</code></li>
+        <li><code>C:\Program Files\My Service\service.exe</code></li>
+      </ol>
+
+      <p>
+        An attacker can exploit this behavior by:
+      </p>
+
+      <ul>
+        <li>Identifying a vulnerable service with an unquoted path</li>
+        <li>Placing a malicious executable in a higher-precedence location, such as:</li>
+      </ul>
+
+      <pre><code>C:\Program.exe</code></pre>
+
+      <p>
+        If successful, Windows will execute the attacker-controlled binary instead of the legitimate service binary, resulting in execution under: <strong>NT AUTHORITY\SYSTEM</strong>
+      </p>
+
+      <p>
+        To locate vulnerable services, I queried for registry modifications to service <code>ImagePath</code> values using <strong>Sysmon Event ID 13</strong>:
+      </p>
+
+      <pre><code>index="folks" host=client02 EventCode=13  
+TargetObject="HKLM\\System\\CurrentControlSet\\Services\\*\\ImagePath"  
+| table _time, TargetObject, Details, host  
+| dedup Details</code></pre>
+
+      <p>
+        This returned the following entry:
+      </p>
+
+      <ul>
+        <li><strong>Time:</strong> <code>2023-05-09 11:38:14</code></li>
+        <li><strong>Host:</strong> <code>CLIENT02</code></li>
+      </ul>
+
+      <table>
+        <thead>
+          <tr>
+            <th>TargetObject</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>HKLM\System\CurrentControlSet\Services\Monitoring service\ImagePath</td>
+            <td>C:\Program Files\Basic Monitoring\Automate-Basic-Monitoring.exe</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>
+        This indicates that a service named <strong>Monitoring service</strong> was configured on the system.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/3.png" alt="Unquoted service path registry entry">
+        <figcaption>Registry entry showing vulnerable unquoted service path</figcaption>
+      </figure>
+
+      <p>
+        The service path:
+      </p>
+
+      <p><code>C:\Program Files\Basic Monitoring\Automate-Basic-Monitoring.exe</code></p>
+
+      <p>
+        is vulnerable because:
+      </p>
+
+      <ul>
+        <li>It contains <strong>spaces</strong></li>
+        <li>It is <strong>not enclosed in quotation marks</strong></li>
+      </ul>
+
+      <p>
+        A secure configuration would be:
+      </p>
+
+      <pre><code>"C:\Program Files\Basic Monitoring\Automate-Basic-Monitoring.exe"</code></pre>
+
+      <p>
+        Due to this misconfiguration, Windows may attempt to execute:
+      </p>
+
+      <ol>
+        <li><code>C:\Program.exe</code></li>
+        <li><code>C:\Program Files\Basic.exe</code></li>
+        <li><code>C:\Program Files\Basic Monitoring\Automate-Basic-Monitoring.exe</code></li>
+      </ol>
+
+      <p>
+        An attacker can exploit this by placing a malicious executable such as:
+      </p>
+
+      <pre><code>C:\Program.exe</code></pre>
+
+      <p>
+        If the service is started, Windows may execute the malicious binary instead of the intended executable.
+      </p>
+
+      <p>Final Answer == <code>Automate-Basic-Monitoring.exe</code></p>
+    </div>
+
+	Additional Reading: https://cisotimes.com/detecting-unquoted-service-paths-an-essential-security-measure-for-penetration-testers-and-blue-teams/
+
+    <hr class="section-divider">
+
+    <!-- TASK 5 -->
+    <div class="task">
+      <h3>Q5:</h3>
+
+      <p><strong>What is the SHA256 of the executable that escalates the attacker's privileges?</strong></p>
+
+      <p>
+        Building on the findings from <strong>Question 4</strong>, where an <strong>Unquoted Service Path vulnerability</strong> was identified, I investigated whether the attacker exploited this misconfiguration by placing a malicious executable in a higher-precedence path.
+      </p>
+
+      <p>
+        Given that Windows may attempt to execute <code>C:\Program.exe</code> when parsing an unquoted service path, I searched for the creation of this file using <strong>Sysmon Event ID 11 (File Creation)</strong>:
+      </p>
+
+      <pre><code>index="folks" host=client02 EventCode=11 Program.exe  
+| table TargetFilename _time</code></pre>
+
+      <p>
+        This query revealed that the file:
+      </p>
+
+      <pre><code>C:\Program.exe</code></pre>
+
+      <p>
+        was created at: <strong>2023-05-10 04:50:27</strong>
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/5.png" alt="Creation of Program.exe on CLIENT02">
+        <figcaption>File creation event showing malicious Program.exe dropped to exploit the service path</figcaption>
+      </figure>
+
+      <p>
+        This strongly suggests that the attacker placed a malicious executable in the root directory to exploit the unquoted service path vulnerability.
+      </p>
+
+      <p>
+        To obtain the hash of the executable, I analyzed <strong>process creation events (Sysmon Event ID 1)</strong> and searched for instances where <code>Program.exe</code> was executed and the <code>Image</code>:
+      </p>
+
+      <pre><code>index="folks" host=client02 EventCode=1 Program.exe 
+| table Image hashes</code></pre>
+
+      <p>
+        From the resulting events, I identified the SHA256 hash associated with the executable:
+      </p>
+
+      <pre><code>8ACC5D98CFFE8FE7D85DE218971B18D49166922D079676729055939463555BD2</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/6.png" alt="SHA256 hash for Program.exe">
+        <figcaption>Process metadata revealing the SHA256 hash of Program.exe</figcaption>
+      </figure>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 6 -->
+    <div class="task">
+      <h3>Q6:</h3>
+
+      <p><strong>When did the attacker download <strong>fun.exe</strong>?</strong></p>
+
+      <p>
+        To determine when <code>fun.exe</code> was downloaded, I analyzed file creation events using <strong>Sysmon Event ID 11</strong>, which logs newly created files on the system. I filtered for occurrences of <code>fun.exe</code> while excluding irrelevant files such as Splunk artifacts, PowerShell scripts, and DLLs:
+      </p>
+
+      <pre><code>index="folks" host=CLIENT02 EventCode=11 TargetFilename!=*Splunk* TargetFilename!=*ps1* TargetFilename!=*dll* fun.exe
+| table TargetFilename _time</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/4.png" alt="File creation event for fun.exe">
+        <figcaption>Sysmon file creation event showing when fun.exe was written to disk</figcaption>
+      </figure>
+
+      <p>
+        This query returned a file creation event indicating that the executable:
+      </p>
+
+      <pre><code>C:\Users\HelpDesk\fun.exe</code></pre>
+
+      <p>
+        was created on the system at: <strong>2023-05-10 05:08:57</strong>
+      </p>
+
+      <p>
+        Since Sysmon Event ID 11 captures file creation activity, this timestamp represents when <code>fun.exe</code> was written to disk, which strongly indicates the time it was downloaded or dropped onto the system by the attacker.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 7 -->
+    <div class="task">
+      <h3>Q7:</h3>
+
+      <p><strong>What is the command line used to launch the DCSync attack</strong></p>
+
+      <p>
+        To identify the command used to perform the DCSync attack, I analyzed <strong>process creation events (Sysmon Event ID 1)</strong> associated with the previously identified malicious executable <code>fun.exe</code>.
+      </p>
+
+      <pre><code>index="folks" host=CLIENT02 EventCode=1 Image=*fun.exe*  
+| table ParentImage, ParentCommandLine, ParentProcessId, Image, ProcessId, CommandLine, _time</code></pre>
+
+      <p>
+        This query returned a relevant event at: <strong>2023-05-10 08:09:36</strong>
+      </p>
+
+      <p>
+        The event shows <strong>PowerShell</strong> spawning <code>fun.exe</code> with the following command line: <code>"C:\Users\HelpDesk\fun.exe" "lsadump::dcsync /user:Abdullah-work\Administrator"</code>
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/7.png" alt="fun.exe launching DCSync attack">
+        <figcaption>DCSync execution via renamed Mimikatz binary fun.exe</figcaption>
+      </figure>
+
+      <p>
+        This command indicates that the attacker executed a <strong>DCSync attack</strong> using a renamed Mimikatz binary (<code>fun.exe</code>). The <code>lsadump::dcsync</code> module is a well-known Mimikatz function that allows an attacker to request credential data from a Domain Controller.
+      </p>
+
+      <p>
+        A DCSync attack works by abusing <strong>Active Directory replication permissions</strong>, allowing the attacker to impersonate a Domain Controller and request sensitive account data. Specifically, this technique can retrieve:
+      </p>
+
+      <ul>
+        <li>NTLM password hashes</li>
+        <li>Kerberos encryption keys</li>
+        <li>Other credential-related secrets</li>
+      </ul>
+
+      <p>
+        In this case, the attacker targeted the account: <strong>Abdullah-work\Administrator</strong>
+      </p>
+
+      <p>
+        This demonstrates that the attacker had obtained sufficient privileges to perform replication operations, effectively mimicking a legitimate Domain Controller to extract credentials.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 8 -->
+    <div class="task">
+      <h3>Q8:</h3>
+
+      <p><strong>What is the original name of <strong>fun.exe</strong>?</strong></p>
+
+      <p>
+        To determine the original name of <code>fun.exe</code>, I analyzed the process metadata associated with the executable. While the command-line arguments (<code>lsadump::dcsync</code>) strongly suggested that the binary was a renamed version of <strong>Mimikatz</strong>, I verified this by inspecting the file’s detailed attributes within the event data.
+      </p>
+
+      <p>
+        By expanding the event details for <code>fun.exe</code>, the <strong>OriginalFileName</strong> field revealed: <strong>mimikatz.exe</strong>
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 9 -->
+    <div class="task">
+      <h3>Q9:</h3>
+
+      <p><strong>The attacker performed the Over-Pass-The-Hash technique. What is the AES256 hash of the account he attacked?</strong></p>
+
+      <p>
+        Over-Pass-the-Hash (also known as <strong>Pass-the-Key</strong>) is a technique that allows attackers to request <strong>Kerberos Ticket Granting Tickets (TGTs)</strong> using stolen credential material. Instead of using a plaintext password, the attacker leverages either an <strong>NTLM hash</strong> or a <strong>Kerberos AES key</strong> to authenticate with the Domain Controller.
+      </p>
+
+      <p>
+        To identify this activity, I searched for process creation events (<strong>Sysmon Event ID 1</strong>) containing the <code>asktgt</code> flag, which is commonly associated with Kerberos ticket requests using tools such as Mimikatz or Rubeus:
+      </p>
+
+      <pre><code>index="folks" host=CLIENT02 EventCode=1 *asktgt*  
+| table ParentImage, ParentCommandLine, ParentProcessId, Image, ProcessId, CommandLine</code></pre>
+
+      <p>
+        This query returned multiple results between:
+      </p>
+
+      <ul>
+        <li><strong>2023-05-10 06:49:48</strong></li>
+        <li><strong>2023-05-10 07:15:17</strong></li>
+      </ul>
+
+      <p>
+        indicating repeated attempts to request Kerberos tickets using different accounts.
+      </p>
+
+      <p>
+        The command lines show the attacker using a renamed tool (<code>Microsoft-Update.exe</code>) to execute <code>asktgt</code> operations against multiple accounts, including:
+      </p>
+
+      <ul>
+        <li><code>it-support</code></li>
+        <li><code>Mohamed</code></li>
+        <li><code>Administrator</code></li>
+      </ul>
+
+      <p>
+        One of the observed commands is:
+      </p>
+
+      <pre><code>"C:\Users\HelpDesk\Microsoft-Update.exe" asktgt /user:it-support /aes256:e1545adafb17d4e61b66a6ecc189718aed4ad3e5c3382ea08575a499ed231428 /opsec /createnetonly:C:\Windows\System32\cmd.exe /show /ptt</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/8.png" alt="Over-Pass-the-Hash using AES256 key">
+        <figcaption>Rubeus asktgt command using the AES256 key for the it-support account</figcaption>
+      </figure>
+
+      <p>
+        This command demonstrates that the attacker is:
+      </p>
+
+      <ul>
+        <li>Using an <strong>AES256 Kerberos key</strong> for authentication</li>
+        <li>Requesting a <strong>TGT for the <code>it-support</code> account</strong></li>
+        <li>Injecting the ticket into a new session (<code>/ptt</code>) for further use</li>
+      </ul>
+
+      <p>
+        Although multiple accounts were targeted, this command clearly shows the AES256 key associated with the <code>it-support</code> account being used to successfully request a Kerberos ticket.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 10 -->
+    <div class="task">
+      <h3>Q10:</h3>
+
+      <p><strong>What service did the attacker abuse to access the Client03 machine as Administrator?</strong></p>
+
+      <p>
+        To identify how the attacker accessed <strong>Client03</strong> as Administrator, I analyzed process creation events (<strong>Sysmon Event ID 1</strong>) on <code>CLIENT02</code>. Based on previous findings, the attacker was actively using a renamed tool (<code>Microsoft-Update.exe</code>), so I focused on activity involving this executable:
+      </p>
+
+      <pre><code>index="folks" host=CLIENT02 EventCode=1 Image=*Microsoft* Administrator  
+| table ParentImage, ParentCommandLine, ParentProcessId, Image, ProcessId, CommandLine, _time</code></pre>
+
+      <p>
+        This query returned a relevant event at: <strong>2023-05-10 06:18:19</strong>
+      </p>
+
+      <p>
+        The associated command line is:
+      </p>
+
+      <pre><code>"C:\Users\HelpDesk\Microsoft-Update.exe" s4u /user:Client02$ /aes256:0a87dfe150dc1da194b965a620e2acd94aea917185c7bb6731aa323470f357d9 /msdsspn:http/Client03 /impersonateuser:Administrator /ptt</code></pre>
+
+      <p>
+        The executable <code>Microsoft-Update.exe</code> was previously identified as a renamed version of <strong>Rubeus</strong>, a tool commonly used for Kerberos abuse. The command above indicates a <strong>Kerberos S4U (Service-for-User) attack</strong>, which leverages delegation to impersonate another user.
+      </p>
+
+      <p>
+        Key elements of the command:
+      </p>
+
+      <ul>
+        <li><code>/user:Client02$</code> → Uses the <strong>machine account</strong> of CLIENT02</li>
+        <li><code>/impersonateuser:Administrator</code> → Requests impersonation of the <strong>Administrator</strong> account</li>
+        <li><code>/msdsspn:http/Client03</code> → Requests a service ticket for the <strong>HTTP service on Client03</strong></li>
+        <li><code>/ptt</code> → Injects the generated ticket into memory (Pass-the-Ticket)</li>
+      </ul>
+
+      <p>
+        As a result, the Domain Controller issues a valid Kerberos service ticket that allows the attacker to authenticate as <strong>Administrator</strong> to the specified service.
+      </p>
+
+      <p>Final Answer == <code>http/Client03'</code></p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 11 -->
+    <div class="task">
+      <h3>Q11:</h3>
+
+      <p><strong>The Client03 machine spawned a new process when the attacker logged on remotely. What is the process name?</strong></p>
+
+      <p>
+        To identify the process spawned during the attacker’s remote logon, I analyzed <strong>process creation events (Sysmon Event ID 1)</strong> on <code>CLIENT03</code>:
+      </p>
+
+      <pre><code>index="folks" host=CLIENT03 EventCode=1 Image!=*Splunk*    
+| table ParentImage, ParentCommandLine, ParentProcessId, Image, ProcessId, CommandLine, _time    
+| sort _time</code></pre>
+
+      <p>
+        To focus on relevant activity, I applied a <strong>time filter</strong> based on the previously identified remote access event in <strong>Question 10</strong> (<strong>2023-05-10 06:18:19</strong>), narrowing the results to the timeframe surrounding the attacker’s lateral movement.
+      </p>
+
+      <p>
+        Upon reviewing the filtered results, I observed that at: <strong>2023-05-10 06:21:44</strong>
+      </p>
+
+      <p>
+        the following process was spawned:
+      </p>
+
+      <pre><code>C:\Windows\System32\wsmprovhost.exe</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/falconeye/9.png" alt="WinRM process spawned on Client03">
+        <figcaption>wsmprovhost.exe spawned during the attacker’s remote WinRM session</figcaption>
+      </figure>
+
+      <p>
+        The process <code>wsmprovhost.exe</code> is a legitimate Windows binary known as the <strong>Windows Management Provider Host</strong>, which is associated with <strong>Windows Remote Management (WinRM)</strong>.
+      </p>
+
+      <p>
+        This finding aligns with the activity identified in Question 10, where the attacker: Authenticated as the <strong>Administrator</strong> account
+      </p>
+
+      <p>
+        Since WinRM operates over HTTP and spawns <code>wsmprovhost.exe</code> during remote sessions, the presence of this process confirms that the attacker connected to <strong>Client03</strong>.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 12 -->
+    <div class="task">
+      <h3>Q12:</h3>
+
+      <p><strong>The attacker compromises the <strong>it-support</strong> account. What was the logon type?</strong></p>
+
+      <p>
+        To determine the logon type associated with the compromise of the <code>it-support</code> account, I analyzed process creation activity involving Kerberos ticket requests. Specifically, I searched for commands containing the <code>asktgt</code> flag as previously analyzed, which is commonly used by tools such as Rubeus to request Kerberos tickets:
+      </p>
+
+      <pre><code>index="folks" host=CLIENT02 EventCode=1 *asktgt*  
+| table ParentImage, ParentCommandLine, ParentProcessId, Image, ProcessId, CommandLine</code></pre>
+
+      <p>
+        This query revealed the following command as seen previously:
+      </p>
+
+      <pre><code>"C:\Users\HelpDesk\Microsoft-Update.exe" asktgt /user:it-support /aes256:e1545adafb17d4e61b66a6ecc189718aed4ad3e5c3382ea08575a499ed231428 /opsec /createnetonly:C:\Windows\System32\cmd.exe /show /ptt</code></pre>
+
+      <p>
+        The executable <code>Microsoft-Update.exe</code> was previously identified as a renamed version of <strong>Rubeus</strong>, and this command demonstrates an <strong>Over-Pass-the-Hash (Pass-the-Key)</strong> attack. The attacker uses the AES256 Kerberos key of the <code>it-support</code> account to request a valid <strong>Ticket Granting Ticket (TGT)</strong>.
+      </p>
+
+      <p>
+        the important parameter in this command is:
+      </p>
+
+      <pre><code>/createnetonly:C:\Windows\System32\cmd.exe</code></pre>
+
+      <p>
+        This option creates a new <strong>network-only logon session</strong>, which corresponds to: <strong>Logon Type 9 (NewCredentials)</strong>
+      </p>
+
+      <p>
+        This type of logon is typically generated when using <code>runas /netonly</code> or similar mechanisms, where credentials are not validated locally but are used for outbound network authentication.
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- TASK 13 -->
+    <div class="task">
+      <h3>Q13:</h3>
+
+      <p><strong>What ticket name did the attacker generate to access the parent DC as Administrator?</strong></p>
+
+      <p>
+        To identify the ticket generated for accessing the parent domain controller, I analyzed <strong>process creation events (Sysmon Event ID 1)</strong> involving the <code>Administrator</code> account on <code>CLIENT02</code> as I had observed interesting activity in my earlier investigation:
+      </p>
+
+      <pre><code>index="folks" host=CLIENT02 Administrator EventCode=1  
+| table ParentImage, ParentCommandLine, ParentProcessId, Image, ProcessId, CommandLine, _time</code></pre>
+
+      <p>
+        During this analysis, I identified activity consistent with <strong>Golden Ticket creation</strong> using a renamed Mimikatz binary (<code>Better-to-trust.exe</code>).
+      </p>
+
+      <p>
+        At: <strong>2023-05-10 07:36:07</strong> the following command was executed:
+      </p>
+
+      <pre><code>"C:\Users\HelpDesk\Better-to-trust.exe" "kerberos::golden /user:Administrator /domain:Abdullah.Ali.Alhakami /sid:S-1-5-21-1316629931-576095952-2750207263 /sids:S-1-5-21-2314577697-1335098093-3289815499-519 /rc4:8a1a8ab21f32a13a8d83254d33448424 service:krbtgt /target:Ali.Alhakami /ticket:trust-test2.kirbi"</code></pre>
+
+      <p>
+        This command demonstrates the creation of a <strong>Kerberos Golden Ticket</strong>, which enables the attacker to forge authentication tickets and gain unauthorized access across the domain or forest.
+      </p>
+
+      <p>
+        Key indicators include:
+      </p>
+
+      <ul>
+        <li><code>kerberos::golden</code> → Golden Ticket generation</li>
+        <li><code>/user:Administrator</code> → Impersonating the Administrator account</li>
+        <li><code>service:krbtgt</code> → Leveraging the Kerberos ticket-granting service</li>
+        <li><code>/target:Ali.Alhakami</code> → Targeting the parent domain</li>
+        <li><code>/ticket:trust-test2.kirbi</code> → Name of the generated ticket</li>
+      </ul>
+
+      <p>
+        This confirms that the attacker generated a forged Kerberos ticket specifically to access the parent domain as Administrator.
+      </p>
+    </div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
