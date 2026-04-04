@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nessus Vulnerability Assessment Lab | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+
+  <style>
+    /* Wider layout for this write-up */
+    .argus-header {
+      max-width: min(75vw, 1400px);
+      margin: 0 auto 2rem;
+    }
+
+    .argus-content {
+      max-width: min(75vw, 1400px);
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0 2rem;
+      background: #181818;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      border: 1px solid #2a2a2a;
+      padding: 0.95rem 1rem;
+      text-align: left;
+      vertical-align: top;
+      color: #d7d7d7;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .comparison-table th {
+      background: #111;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .comparison-table tr:nth-child(even) {
+      background: #1c1c1c;
+    }
+
+    .highlight-box {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-left: 4px solid var(--accent);
+      border-radius: 12px;
+      padding: 1.25rem 1.25rem;
+      margin: 1.5rem 0 2rem;
+    }
+
+    .highlight-box p:last-child,
+    .highlight-box ul:last-child {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Nessus Vulnerability Assessment Lab</h1>
+    <a class="back-link" href="../index.html">← Back to Projects</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Introduction</h2>
+    <p>
+      This lab was designed to provide hands-on experience with vulnerability assessment using <strong>Tenable Nessus</strong> in a controlled environment. The goal was to build a small isolated network, discover live hosts, perform both <strong>non-credentialed</strong> and <strong>credentialed</strong> vulnerability scans, and analyze the differences in visibility between the two approaches.
+    </p>
+
+    <p>
+      For the lab environment, I deployed <strong>Tenable Nessus on Ubuntu</strong>, powered on a <strong>Metasploitable2 host</strong>, and also included my <strong>Domain Controller</strong> on the same lab network for discovery purposes. Since Metasploitable2 is intentionally vulnerable and ideal for demonstrating exposure across multiple services, it became the primary focus of the assessment.
+    </p>
+
+    <div class="highlight-box">
+      <p><strong>Project Goals</strong></p>
+      <ul>
+        <li>Deploy and configure Nessus in a small isolated environment</li>
+        <li>Validate host connectivity and perform host discovery</li>
+        <li>Run a non-credentialed vulnerability assessment against Metasploitable2</li>
+        <li>Run a credentialed vulnerability assessment and compare the results</li>
+        <li>Review critical findings and discuss remediation considerations</li>
+      </ul>
+    </div>
+
+    <hr class="section-divider">
+
+    <h2>Lab Setup</h2>
+    <p>
+      To initialize the project, I downloaded and installed <strong>Tenable Nessus on Ubuntu</strong>. I also powered on <strong>Metasploitable2</strong>, which contains numerous intentionally vulnerable services, and powered on my <strong>Domain Controller</strong> so it could also appear during host discovery.
+    </p>
+
+    <p>
+      I then created a <strong>host-only network adapter</strong> so that the Ubuntu Nessus system would communicate only with the Metasploitable and Domain Controller systems for the purpose of this lab. This helped keep the environment isolated and focused strictly on the intended scan targets.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/1.png" alt="Host-only lab network configuration">
+      <figcaption>Host-only network configuration used to isolate the Nessus lab environment</figcaption>
+    </figure>
+
+    <p>
+      Once the network was configured, I logged into the hosts and verified that they could communicate with the Tenable Nessus host.
+    </p>
+
+    <p>
+      Since this was a small environment, I already knew what I was scanning and which devices were present on the network. In a real-world environment, however, one of the first priorities would be identifying <strong>how many devices are on the network</strong> and <strong>what those devices are</strong> before launching broader vulnerability assessments.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Host Discovery Scan</h2>
+    <p>
+      A strong starting point for this is a <strong>Host Discovery</strong> scan. To initialize host discovery, I selected <code>New Scan</code> from the Nessus dashboard.
+    </p>
+
+    <p>
+      Once clicked, I selected the <code>Host Discovery</code> scan template.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/2.png" alt="Nessus host discovery template">
+      <figcaption>Selecting the Host Discovery scan template in Nessus</figcaption>
+    </figure>
+
+    <p>
+      From there, Nessus provides options such as the scan name, description, folder, and targets.
+    </p>
+
+    <p>
+      For the targets, I entered <code>192.168.204.0/24</code> because I wanted to discover all hosts on that subnet. Nessus also provides options to scan ports and gather additional information, but that was not the focus of this stage.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/3.png" alt="Host discovery target configuration">
+      <figcaption>Configuring the target range for host discovery</figcaption>
+    </figure>
+
+    <p>
+      Once the settings were configured, I saved the scan and launched it.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/4.png" alt="Launching the host discovery scan">
+      <figcaption></figcaption>
+    </figure>
+
+    <p>
+      After the scan completed, Nessus successfully identified both the <strong>Domain Controller</strong> and <strong>Metasploitable</strong> hosts on the network.
+    </p>
+
+    <p>
+      For this lab, since Metasploitable is intentionally packed with vulnerabilities, I chose to focus the remainder of the assessment on that host.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Non-Credentialed Basic Network Scan</h2>
+    <p>
+      As shown in the dashboard, Nessus provides multiple scan options that can be run against identified hosts. For this part of the lab, I selected a <code>Basic Network Scan</code>.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/5.png" alt="Basic network scan selection">
+      <figcaption>Selecting a Basic Network Scan for the Metasploitable host</figcaption>
+    </figure>
+
+    <p>
+      As shown above, I configured the scan so that it would target only the <strong>Metasploitable</strong> host.
+    </p>
+
+    <p>
+      On the left-hand side of the configuration menu, Nessus also provides options to schedule recurring scans. This would be useful in a production environment where regular assessments are required. Nessus also supports SMTP configuration for notifications, allowing scan results or status updates to be sent automatically.
+    </p>
+
+    <p>
+      Within the <strong>Discovery</strong> tab, I configured how Nessus should determine whether the host is alive. For this scan, I selected <code>Port scan (all ports)</code> because I wanted visibility into all reachable services and open ports on the target.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/6.png" alt="Discovery settings with all ports selected">
+      <figcaption>Discovery settings configured to scan all ports</figcaption>
+    </figure>
+
+    <p>
+      In the <strong>Assessment</strong> tab, Nessus provides the option to scan for <code>web applications</code> as well. For the sake of lab scope and time, I kept these settings at their defaults.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/7.png" alt="Assessment settings in Nessus">
+      <figcaption>Assessment tab left at default settings for the lab</figcaption>
+    </figure>
+
+    <p>
+      Next, in the <strong>Credentials</strong> tab, Nessus provides the option to authenticate to the host. Supplying valid credentials allows the scanner to perform additional checks that are not possible during a standard external, non-credentialed scan.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/8.png" alt="Credentials tab in Nessus">
+      <figcaption>Credentials tab showing authentication options for deeper inspection</figcaption>
+    </figure>
+
+    <p>
+      For this first scan, I intentionally left the credentials blank. My plan was to first complete a <strong>non-credentialed scan</strong>, then run a second scan with credentials so that I could analyze the differences between the two approaches.
+    </p>
+
+    <p>
+      Under the <strong>Plugins</strong> tab, Nessus shows the actual checks it performs to identify vulnerabilities and misconfigurations.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/9.png" alt="Nessus plugins tab">
+      <figcaption>Plugins tab displaying the checks Nessus can perform during the assessment</figcaption>
+    </figure>
+
+    <p>
+      Once the scan settings looked correct, I saved the scan and launched it.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Non-Credentialed Scan Results</h2>
+    <p>
+      After the scan completed, I reviewed the results in the Nessus dashboard.
+    </p>
+
+      <p>
+      From the results, it is evident that the target contained the following findings:
+    </p>
+
+    <ul>
+      <li><strong>Critical:</strong> 10</li>
+      <li><strong>High:</strong> 6</li>
+      <li><strong>Medium:</strong> 24</li>
+      <li><strong>Low:</strong> 9</li>
+      <li><strong>Info:</strong> 145</li>
+    </ul>
+
+    <p>
+      This resulted in a total of <strong>194 findings</strong>.
+    </p>
+
+    <p>
+      By navigating to the <code>Vulnerabilities</code> tab, I was able to review the weaknesses and misconfigurations identified on the host. Nessus also allows sorting by <strong>CVSS score</strong>, which I used here to prioritize the most critical findings first.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/10.png" alt="Vulnerabilities tab sorted by CVSS">
+      <figcaption>Vulnerabilities tab sorted by CVSS score to prioritize risk</figcaption>
+    </figure>
+
+    <p>
+      Immediately, several <strong>critical vulnerabilities</strong> stood out. For this example, I chose to review <code>VNC Server "password" password</code>.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/11.png" alt="VNC password vulnerability">
+      <figcaption>Critical finding showing a weak VNC password on Metasploitable2</figcaption>
+    </figure>
+
+    <p>
+      From the vulnerability details page, it became clear that the VNC service running on Metasploitable2 was highly insecure because it was configured with the weak password <code>password</code>. If a malicious actor were to identify this exposed service and attempt authentication using common password guesses or a basic wordlist, they would likely succeed.
+    </p>
+
+    <p>
+      In a real-world environment, a finding like this would warrant immediate attention and escalation through the proper process. Depending on the organization, that may involve the vulnerability management team, IT operations, or the security team. In many environments, remediation would most commonly be handled by IT.
+    </p>
+
+    <p>
+      After remediation is completed (strong password change), a <strong>targeted rescan</strong> should be conducted to verify that the issue has truly been resolved.
+    </p>
+
+    <p>
+      The next critical finding I reviewed was <code>Bind Shell Backdoor Detection</code>.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/12.png" alt="Bind shell backdoor detection">
+      <figcaption>Critical bind shell backdoor finding identified by Nessus</figcaption>
+    </figure>
+
+    <p>
+      This finding indicates that the target machine has a <strong>bind shell backdoor</strong> listening for inbound connections. A bind shell opens a port on the compromised system, waits for an incoming connection, and then provides the connecting user with command-line access.
+    </p>
+
+    <p>
+      This is correctly classified as <strong>critical</strong> because, as shown in the vulnerability details, <strong>no authentication is required</strong>. Any attacker who reaches that port could potentially execute commands directly on the system.
+    </p>
+
+    <p>
+      In the Nessus output, it is evident that the <code>id</code> command was executed successfully and returned <code>uid=0(root)</code>.
+    </p>
+
+    <p>
+      The recommended solution is to verify whether the host has been compromised and, if necessary, rebuild or reinstall the system.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Credentialed Scan</h2>
+    <p>
+      After completing the initial analysis, I moved on to the <strong>credentialed scan</strong>.
+    </p>
+
+    <p>
+      To do this, I clicked into the completed scan, selected <code>More</code>, and made a copy of the existing configuration. I then edited the copied scan to include valid credentials, unlike the original scan.
+    </p>
+
+    <p>
+      Once the configuration was updated, I launched the scan just as before.
+    </p>
+
+    <p>
+      After it finished, I reviewed the results to compare what Nessus identified when it was able to authenticate to the system.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/13.png" alt="Credentialed scan dashboard">
+      <figcaption>Credentialed scan results showing a significant increase in findings</figcaption>
+    </figure>
+
+    <p>
+      As shown in the dashboard, the credentialed scan produced a total of <strong>471 findings</strong>, which is a substantial increase over the <strong>194 findings</strong> identified during the non-credentialed scan. This clearly demonstrates the visibility gap between scanning a system externally and scanning it with authenticated access.
+    </p>
+
+    <p>
+      This scan also displayed <strong>“Auth: Pass”</strong>, meaning:
+    </p>
+
+    <ul>
+      <li>The scanner had valid credentials (SSH, SMB, or similar)--Password in my case.</li>
+      <li>It was able to log into the target system</li>
+      <li>It could inspect the host internally rather than relying only on exposed services</li>
+    </ul>
+
+    <p>
+      That additional level of access allowed Nessus to identify issues such as:
+    </p>
+
+    <ul>
+      <li>Missing patches</li>
+      <li>Weak internal configurations</li>
+      <li>Installed vulnerable software</li>
+      <li>Potential local privilege escalation issues</li>
+    </ul>
+
+    <hr class="section-divider">
+
+    <h2>Credentialed vs Non-Credentialed Comparison</h2>
+
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Non-Credentialed Scan</th>
+          <th>Credentialed Scan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Total Findings</td>
+          <td>194</td>
+          <td>471</td>
+        </tr>
+        <tr>
+          <td>Visibility Level</td>
+          <td>External perspective only</td>
+          <td>Internal host visibility through authenticated access</td>
+        </tr>
+        <tr>
+          <td>What Nessus Could Assess</td>
+          <td>Exposed services, open ports, remotely detectable vulnerabilities, weak externally visible configurations</td>
+          <td>Installed software, missing patches, local misconfigurations, deeper OS-level and service-level weaknesses</td>
+        </tr>
+        <tr>
+          <td>Strengths</td>
+          <td>Useful for identifying attack surface visible to an external or unauthenticated attacker</td>
+          <td>Provides broader and deeper vulnerability coverage with better remediation insight</td>
+        </tr>
+        <tr>
+          <td>Limitations</td>
+          <td>May miss important vulnerabilities that require local inspection</td>
+          <td>Requires valid credentials and proper access configuration</td>
+        </tr>
+        <tr>
+          <td>Example Observations</td>
+          <td>VNC weak password, bind shell backdoor</td>
+          <td>Shellshock and additional internally discoverable issues</td>
+        </tr>
+        <tr>
+          <td>Best Use Case</td>
+          <td>Attack surface validation and unauthenticated exposure assessment</td>
+          <td>Comprehensive internal vulnerability management and patch validation</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      The comparison makes it clear that both scan types are valuable, but they serve different purposes. A non-credentialed scan helps simulate what an external attacker may observe, while a credentialed scan provides a much deeper picture of the host’s actual security posture.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Credentialed Scan Findings</h2>
+    <p>
+      When reviewing the vulnerabilities identified during the credentialed scan, one of the most notable new critical findings was <code>Bash Remote Code Execution (Shellshock)</code>, which was not seen previously in the non-credentialed scan.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/14.png" alt="Shellshock vulnerability in Nessus">
+      <figcaption>Credentialed scan identifying the Shellshock vulnerability</figcaption>
+    </figure>
+
+    <p>
+      After opening the vulnerability details, it became clear why this issue was classified as <strong>critical</strong>.
+    </p>
+
+    <figure class="image-block">
+      <img src="../assets/images/nessus/15.png" alt="Shellshock vulnerability details">
+      <figcaption>Shellshock vulnerability details and proof of command execution</figcaption>
+    </figure>
+
+    <p>
+      This vulnerability is one of the most well-known and dangerous bugs affecting Linux systems, commonly referred to as <strong>Shellshock</strong>.
+    </p>
+
+    <p>
+      It affects <strong>Bash (GNU Bourne Again Shell)</strong> and allows attackers to:
+    </p>
+
+    <ol>
+      <li>Inject malicious commands into environment variables</li>
+      <li>Cause Bash to execute those commands</li>
+      <li>Achieve <strong>remote code execution (RCE)</strong> on the target</li>
+    </ol>
+
+    <p>
+      In the Nessus output, it is clear that the scanner successfully executed <code>/usr/bin/id</code>, which returned:
+    </p>
+
+    <pre><code>uid=1000(msfadmin)</code></pre>
+
+    <p>
+      Nessus used the following payload:
+    </p>
+
+    <pre><code>() { :;}; /usr/bin/id &gt; /tmp/nessus...</code></pre>
+
+    <p>
+      This is the classic <strong>Shellshock exploit syntax</strong>:
+    </p>
+
+    <ul>
+      <li><code>() { :;};</code> triggers the vulnerability</li>
+      <li>Anything following it is interpreted and executed as a command</li>
+    </ul>
+
+    <p>
+      To remediate this vulnerability, the recommended action is to update Bash.
+    </p>
+
+    <p>
+      This can be done with:
+    </p>
+
+    <pre><code>sudo apt update &amp;&amp; sudo apt install --only-upgrade bash</code></pre>
+
+    <p>
+      Then restart and verify the patch using:
+    </p>
+
+    <pre><code>env x='() { :;}; echo vulnerable' bash -c "echo test"</code></pre>
+
+    <p>
+      If the system is properly patched, it should <strong>not</strong> print <code>vulnerable</code>.
+    </p>
+
+    <p>
+      After patching, another scan should be performed, and this specific vulnerability should be given priority attention. It should not appear again if remediation has been completed successfully.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>Host discovery is an important first step before launching vulnerability assessments across an environment.</li>
+      <li>Non-credentialed scans provide useful insight into externally visible exposure, but they do not tell the full story.</li>
+      <li>Credentialed scans provide far greater visibility into missing patches, weak configurations, and locally installed vulnerable software.</li>
+      <li>Sorting findings by CVSS helps prioritize remediation efforts and focus attention on the most serious risks first.</li>
+      <li>Findings such as weak passwords, exposed backdoors, and remotely exploitable vulnerabilities should be escalated quickly and validated through rescanning after remediation.</li>
+      <li>This lab clearly demonstrates why organizations benefit from using both authenticated and unauthenticated scans as part of a mature vulnerability management program.</li>
+    </ul>
+
+    <hr class="section-divider">
+
+    <h2>Project Outcomes</h2>
+    <p>
+      By the end of this lab, I successfully deployed Nessus in an isolated environment, validated host communication, discovered live hosts on the subnet, and performed both non-credentialed and credentialed scans against Metasploitable2.
+    </p>
+
+    <p>
+      The assessment showed a clear and measurable difference between the two scan types, with the credentialed scan uncovering far more issues and providing deeper insight into the target’s security posture. The lab also reinforced the importance of vulnerability prioritization, remediation validation, and using the appropriate scan type depending on the assessment objective.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Conclusion</h2>
+    <p>
+      This Nessus lab was a practical demonstration of how vulnerability scanning fits into defensive security operations. It showed not only how to configure and launch scans, but also how to interpret results, prioritize critical findings, and think through remediation from an operational perspective.
+    </p>
+
+    <p>
+      Most importantly, the lab highlighted the major difference between what can be identified from the outside versus what can be uncovered with authenticated access. While the non-credentialed scan provided meaningful exposure data, the credentialed scan delivered a much more complete assessment of the host. Together, both perspectives provide valuable insight and help build a stronger overall vulnerability management process.
+    </p>
+
+  </main>
+
+</div>
+
+</body>
+</html>
