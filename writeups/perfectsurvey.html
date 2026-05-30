@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Perfect Survey</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>Perfect Survey</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Scenario:</h2>
+    <p>
+      The Wowza Sport website recently came under a suspected cyberattack. Internal stakeholders believe that a rival competitor may be behind the incident. On the day of the attack, monitoring systems detected a sudden and abnormal surge in incoming web requests, overwhelming the company’s online services.
+    </p>
+
+    <p>
+      Your task is to investigate the compromised web server, which also functions as the domain controller for the Wowza Sport environment. You are expected to analyze logs, identify the source and method of the attack, and assess the potential impact on both the website and the organization’s Active Directory infrastructure
+    </p>
+
+    <hr class="section-divider">
+
+    <h3>Executive Summary</h3>
+    <p>
+      The Wowza Sport web server, which also functioned as the domain controller, was compromised following external reconnaissance from IP address <strong>47.128.63.0</strong>. The attacker first identified the site as running <strong>WordPress</strong> using Nmap and WPScan, then exploited a SQL injection vulnerability in the <strong>Perfect Survey</strong> plugin to extract password hashes from the <code>wp_users</code> table. After cracking the <code>user_pass</code> hash, the attacker authenticated as <strong>mourinho.j</strong>, conducted a Kerberoasting attack against <strong>alonso.x</strong>, and successfully compromised that account. Leveraging the elevated access, the attacker created a rogue machine account (<strong>MADRID$</strong>), configured <strong>Resource-Based Constrained Delegation (msDS-AllowedToActOnBehalfOfOtherIdentity)</strong>, and requested Kerberos service tickets to pivot laterally. The attack culminated in abuse of <strong>Active Directory Certificate Services (AD CS)</strong> using the vulnerable <strong>WorkstationAuth_Internal</strong> template to request a certificate for <strong>Administrator</strong>, enabling full domain privilege escalation and complete compromise of the Active Directory environment.
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- Q1 -->
+    <div class="task">
+      <h3>Q1:</h3>
+
+      <p><strong>The attacker performed service enumeration on the target web server to identify the content management system. What CMS platform was discovered hosting the website?</strong></p>
+
+      <p>
+        Upon entering the environment, I immediately thought of nmap for service enumeration. to discover any nmap activity, i performed a simple query as seen here:
+      </p>
+
+      <pre><code>index=main nmap</code></pre>
+
+      <p>
+        and got the following output:
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/1.png" alt="Wowza Sport Image 1">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        I observed Nmap reconnaissance activity targeting host <code>172.31.10.30</code>, originating from <code>47.128.63.0</code>.  The request to <code>/wordpress/</code> returned HTTP 200, suggesting a WordPress installation may be present on the server.
+      </p>
+
+      <p>
+        <strong>User-Agent:</strong> <code>Mozilla/5.0 (compatible; Nmap Scripting Engine; https://nmap.org/book/nse.html)</code>
+      </p>
+
+      <p>
+        Within the log, we clearly see a request to WordPress, indicating it is the <code>CMS</code> in question.
+      </p>
+    </div>
+
+    <!-- Q2 -->
+    <div class="task">
+      <h3>Q2:</h3>
+
+      <p><strong>A specialized scanning tool was deployed to enumerate CMS-specific vulnerabilities. What is the name and version of the scanning tool used against the CMS?</strong></p>
+
+      <p>
+        In the picture above, I saw:
+      </p>
+
+      <ul>
+        <li><code>source: access.log</code></li>
+        <li><code>sourcetype: access_combined</code></li>
+      </ul>
+
+      <p>
+        To find the tool used for scanning, I shifted my focus to the user agent. The user-agent field is where scanning tools usually identify themselves.
+      </p>
+
+      <pre><code>index=main source="access.log" 
+| stats count by useragent</code></pre>
+
+      <p>
+        From here, we get 4 results:
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/2.png" alt="Wowza Sport Image 2">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        The User-Agent analysis immediately revealed the presence of <strong>WPScan v3.8.28</strong>, which stood out due to its specific purpose of identifying WordPress-related vulnerabilities. Unlike the other tools observed (Nmap and sqlmap), WPScan is explicitly designed for CMS enumeration and vulnerability assessment targeting WordPress installations, making it directly relevant to this investigation.
+      </p>
+    </div>
+
+    <!-- Q3 -->
+    <div class="task">
+      <h3>Q3:</h3>
+
+      <p><strong>Throughout the attack chain, all malicious traffic originated from a single source IP address used by the threat actor. What is the IP address that the threat actor used for their attack?</strong></p>
+
+      <p>
+        Luckily for me, I documented the IP of <code>47.128.63.0</code> conducting nmap activity on our host in an earlier question which was tied to the threat actor.
+      </p>
+    </div>
+
+    <!-- Q4 -->
+    <div class="task">
+      <h3>Q4:</h3>
+
+      <p><strong>The scanner identified a vulnerable third-party plugin installed on the CMS. What is the name of this vulnerable plugin?</strong></p>
+
+      <p>
+        To identify the vulnerable third-party plugin, I focused on activity generated by <strong>WPScan</strong>, specifically reviewing HTTP 200 (successful) responses related to plugin enumeration. During this analysis, I observed a request to at 9/18/25  2:20:16.000 AM:
+      </p>
+
+      <pre><code>/wordpress/wp-content/plugins/perfect-survey/readme.txt</code></pre>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/3.png" alt="Wowza Sport Image 3">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        The presence of this path confirms that the <strong>Perfect Survey</strong> plugin is installed on the WordPress instance. Since WPScan was actively enumerating plugins and successfully accessed the plugin’s readme file, this indicates that <strong>Perfect Survey</strong> is the third-party plugin identified as vulnerable during the scan.
+      </p>
+    </div>
+
+    <!-- Q5 -->
+    <div class="task">
+      <h3>Q5:</h3>
+
+      <p><strong>The attacker attempted to exploit the vulnerable plugin for remote code execution. At what exact timestamp did the scanning tool attempt the RCE exploit? (in 24-hour format)</strong></p>
+
+      <p>
+        To identify this, I quickly turned to research. We know Perfect Survey was enumeration and potentially exploited. So i looked up Perfect survey vulnerabilities and I found this:
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/4.png" alt="Wowza Sport Image 4">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        We see the vulnerability exploit utilizes <code>SQl</code>, and targets the <code>/wordpress/wp-admin/admin-ajax.php</code> path.
+      </p>
+
+      <p>
+        So I crafted a simply query to try and identify any events of this happening.
+      </p>
+
+      <pre><code>index=main clientip=47.128.63.0 */wordpress/wp-admin/admin-ajax.php* status=200
+| sort _time</code></pre>
+
+      <p>
+        With this, I immediatly spot the following:
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/5.png" alt="Wowza Sport Image 5">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        I see an overwhelming amount of SQL injection events initiating on <code>2025-09-18 02:25</code> heavily indicating the <code>perfect-survey</code> plug-in vulnerability was being exploited.
+      </p>
+    </div>
+
+    <!-- Q6 -->
+    <div class="task">
+      <h3>Q6:</h3>
+
+      <p><strong>An automated tool was used to extract password hashes from the CMS database. What database field name did the tool extract containing the password hash?</strong></p>
+
+      <p>
+        The extracted database field was <strong><code>user_pass</code></strong>. In WordPress, user credentials are stored in the <code>wp_users</code> table, and the <code>user_pass</code> column specifically contains the hashed passwords. The automated tool leveraged the SQL injection vulnerability to enumerate the database structure and retrieve this field, which stores the password hashes for user accounts.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/6.png" alt="Wowza Sport Image 6">
+        <figcaption></figcaption>
+      </figure>
+    </div>
+
+    <!-- Q7 -->
+    <div class="task">
+      <h3>Q7:</h3>
+
+      <p><strong>After cracking the extracted hash, the attacker gained valid server credentials. Which user's password was compromised for initial authentication?</strong></p>
+
+      <p>
+        To identify the compromised account, I analyzed all <strong>Event ID 4624 (successful logon)</strong> events within the relevant timeframe following the SQL injection and credential extraction activity. By reviewing the <code>TargetUserName</code> field across these logon events, I observed repeated successful logons associated with the account <strong><code>mourinho.j</code></strong>, indicating that this user account was likely compromised and subsequently used by the attacker.
+      </p>
+    </div>
+
+    <!-- Q8 -->
+    <div class="task">
+      <h3>Q8:</h3>
+
+      <p><strong>A Kerberoasting attack was conducted after compromising the first user. Which user was targeted by this attack?</strong></p>
+
+      <p>
+        To identify the user targeted in the Kerberoasting attack, I analyzed <strong>Event ID 4769</strong>, which logs Kerberos Ticket Granting Service (TGS) requests. Kerberoasting activity is characterized by attackers requesting service tickets for accounts associated with a <strong>Service Principal Name (SPN)</strong>. These service tickets are encrypted using the service account’s NTLM hash, allowing attackers to extract and attempt offline password cracking.
+      </p>
+
+      <p>
+        Threat actors often target service accounts configured with <strong>weak encryption types (e.g., RC4)</strong> or weak passwords, as this significantly reduces cracking time. By reviewing 4769 events and identifying abnormal or high-volume TGS requests for specific SPN-enabled accounts, I was able to determine the user account targeted during the Kerberoasting attempt.
+      </p>
+
+      <pre><code>index=main Event.System.EventID=4769
+| stats count by Event.EventData.TargetUserName, Event.EventData.TicketEncryptionType, Event.EventData.TargetDomainName, Event.EventData.ServiceName</code></pre>
+
+      <p>
+        With the above query, i got an interesting result:
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/7.png" alt="Wowza Sport Image 7">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        At 9/18/25  2:40:44.913 AM we see the compromised user, <code>mourinho.j</code> request a TGS ticket for <code>alonso.x</code> with an RC4 encryption! Then, 10 minutes later on  2:50:30.741 AM, we see a successful logon event tied to <code>alonso.x</code> from the malicious IP which indicates the TGS ticket was successfully cracked.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/8.png" alt="Wowza Sport Image 8">
+        <figcaption></figcaption>
+      </figure>
+    </div>
+
+    <!-- Q9 -->
+    <div class="task">
+      <h3>Q9:</h3>
+
+      <p><strong>A new account was created in preparation for a domain privilege escalation. What is the name of this machine account?</strong></p>
+
+      <p>
+        Following the events that transpired the previous successful logon, we then see the malicious actor create a new computer account named <code>MADRID$</code> under <code>alonso.x</code> context.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/9.png" alt="Wowza Sport Image 9">
+        <figcaption></figcaption>
+      </figure>
+    </div>
+
+    <!-- Q10 -->
+    <div class="task">
+      <h3>Q10:</h3>
+
+      <p><strong>The attacker modified an AD attribute to enable Resource-Based Constrained Delegation. Which specific attribute was modified on the computer account?</strong></p>
+
+      <p>
+        The attribute modified for this to happen was: <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code>.
+      </p>
+
+      <p>
+        In Active Directory (AD) delegation allows impersonating other user accounts on target computer accounts after delegation permissions for them were granted. There are mainly three types of delegation: <em>Unconstrained, Constrained</em> and <em>Resource Based Constrained</em>.
+      </p>
+
+      <p>
+        Delegation allows one account (usually a service or computer account) to:
+      </p>
+
+      <p>
+        Act on behalf of another user to access a resource.
+      </p>
+
+      <p>
+        Normal delegation example:
+      </p>
+
+      <ul>
+        <li>User logs into Web Server</li>
+        <li>Web Server needs to access SQL Server</li>
+        <li>SQL Server must trust Web Server to delegate the user’s identity</li>
+      </ul>
+
+      <p>
+        HOwever, Resource-Based constrained delegation flips the trust direction. instead of "Web-server can delegate to SQL", it now becomes "SQL allows Web Server to act on behalf of users".
+      </p>
+    </div>
+
+    <!-- Q11 -->
+    <div class="task">
+      <h3>Q11:</h3>
+
+      <p><strong>The attacker requested a service ticket through the configured Resource-Based Constrained Delegation chain. Which account was targeted for the service ticket request via RBCD?</strong></p>
+
+      <p>
+        The targeted account for the service ticket request via RBCD was <code>APP-BKUP01$</code>.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/10.png" alt="Wowza Sport Image 10">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        At <strong>9/18/2025 02:50:54.911 AM</strong>, the logs show the external IP address <strong>47.128.63.0</strong> requesting a Kerberos <strong>TGS (Event ID 4769)</strong> using the newly created rogue machine account <strong><code>MADRID$</code></strong> to access the service <strong><code>APP-BKUP01$</code></strong>. This request originated directly from the attacker-controlled IP, strongly indicating abuse of the machine account following its creation.
+      </p>
+
+      <p>
+        The ticket was issued using encryption type <strong>0x12 (AES256)</strong>, which is stronger than the RC4 encryption observed earlier; however, the encryption strength does not reduce the significance of the activity. The key concern is the unauthorized TGS request from a newly created machine account immediately after RBCD configuration, which strongly suggests active delegation abuse and privilege escalation.
+      </p>
+    </div>
+
+    <!-- Q12 -->
+    <div class="task">
+      <h3>Q12:</h3>
+
+      <p><strong>The attacker exploited Active Directory Certificate Services to obtain privileged account hashes. Which high-privilege account was targeted through AD CS escalation?</strong></p>
+
+      <p>
+        at 2025-09-18 02:54:24 UTC, we see an event code 4886 which indicates that a certificate request was submitted to a Certificate Authority.
+      </p>
+
+      <figure class="image-block">
+        <img src="../assets/images/perfectsurvey/11.png" alt="Wowza Sport Image 11">
+        <figcaption></figcaption>
+      </figure>
+
+      <p>
+        We see <code>APP.BKUP01$</code> request the certificate, which if we look back, <code>APP.BKUP01$</code> was accessed via RBCD abuse.
+      </p>
+
+      <p>
+        The request includes: <code>SAN: upn=administrator@worldcup.ball</code> which means the certificate was being requested for the <code>Administrator</code> account And used <code>CertificateTemplate:WorkstationAuth_Internal</code> as the template!
+      </p>
+
+      <p>
+        So overall, the attacker:
+      </p>
+
+      <ol>
+        <li>Abused RBCD to control APP-BKUP01$.</li>
+        <li>Used that access to request a certificate.</li>
+        <li>Specified: SAN: administrator@worldcup.ball.</li>
+        <li>The CA issued a certificate that authenticates as Administrator.</li>
+        <li>The attacker can now use the certificate for full domain compromise.</li>
+      </ol>
+    </div>
+
+    <!-- Q13 -->
+    <div class="task">
+      <h3>Q13:</h3>
+
+      <p><strong>A misconfigured certificate template enabled the AD CS privilege escalation. What is the name of the vulnerable certificate template exploited?</strong></p>
+
+      <p>
+        This was observed in the Attributes field of the previous question: <code>WorkstationAuth_Internal</code>
+      </p>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- IOC TABLE -->
+    <div class="task">
+      <h3>Indicators of Compromise (IOC)</h3>
+
+      <table class="ioc-table">
+        <thead>
+          <tr>
+            <th>IOC Type</th>
+            <th>Indicator</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr>
+            <td>Attacker IP</td>
+            <td>47.128.63.0</td>
+            <td>Source IP used throughout malicious activity</td>
+          </tr>
+
+          <tr>
+            <td>Target Host</td>
+            <td>172.31.10.30</td>
+            <td>Targeted Wowza Sport web server / domain controller</td>
+          </tr>
+
+          <tr>
+            <td>CMS</td>
+            <td>WordPress</td>
+            <td>Content management system discovered during enumeration</td>
+          </tr>
+
+          <tr>
+            <td>Scanning Tool</td>
+            <td>WPScan v3.8.28</td>
+            <td>CMS-specific scanner used against WordPress</td>
+          </tr>
+
+          <tr>
+            <td>Scanning Tool</td>
+            <td>Nmap Scripting Engine</td>
+            <td>Service enumeration activity observed in web logs</td>
+          </tr>
+
+          <tr>
+            <td>User-Agent</td>
+            <td>Mozilla/5.0 (compatible; Nmap Scripting Engine; https://nmap.org/book/nse.html)</td>
+            <td>Nmap user-agent observed during reconnaissance</td>
+          </tr>
+
+          <tr>
+            <td>Vulnerable Plugin</td>
+            <td>Perfect Survey</td>
+            <td>WordPress plugin identified and exploited</td>
+          </tr>
+
+          <tr>
+            <td>Plugin Path</td>
+            <td>/wordpress/wp-content/plugins/perfect-survey/readme.txt</td>
+            <td>Plugin enumeration path successfully accessed</td>
+          </tr>
+
+          <tr>
+            <td>Exploit Path</td>
+            <td>/wordpress/wp-admin/admin-ajax.php</td>
+            <td>Path targeted during SQL injection activity</td>
+          </tr>
+
+          <tr>
+            <td>Database Table</td>
+            <td>wp_users</td>
+            <td>WordPress users table targeted for credential extraction</td>
+          </tr>
+
+          <tr>
+            <td>Database Field</td>
+            <td>user_pass</td>
+            <td>Password hash field extracted by the automated tool</td>
+          </tr>
+
+          <tr>
+            <td>Compromised User</td>
+            <td>mourinho.j</td>
+            <td>Initial authenticated account used after hash cracking</td>
+          </tr>
+
+          <tr>
+            <td>Kerberoasting Target</td>
+            <td>alonso.x</td>
+            <td>User targeted through Kerberos TGS request activity</td>
+          </tr>
+
+          <tr>
+            <td>Rogue Machine Account</td>
+            <td>MADRID$</td>
+            <td>Machine account created for privilege escalation activity</td>
+          </tr>
+
+          <tr>
+            <td>AD Attribute</td>
+            <td>msDS-AllowedToActOnBehalfOfOtherIdentity</td>
+            <td>Attribute modified to enable Resource-Based Constrained Delegation</td>
+          </tr>
+
+          <tr>
+            <td>RBCD Service Ticket Target</td>
+            <td>APP-BKUP01$</td>
+            <td>Account targeted for service ticket request via RBCD</td>
+          </tr>
+
+          <tr>
+            <td>AD CS Target</td>
+            <td>Administrator</td>
+            <td>High-privilege account targeted through certificate abuse</td>
+          </tr>
+
+          <tr>
+            <td>Certificate SAN</td>
+            <td>administrator@worldcup.ball</td>
+            <td>UPN specified in the certificate request</td>
+          </tr>
+
+          <tr>
+            <td>Certificate Template</td>
+            <td>WorkstationAuth_Internal</td>
+            <td>Misconfigured AD CS template used for escalation</td>
+          </tr>
+
+          <tr>
+            <td>Event ID</td>
+            <td>4624</td>
+            <td>Successful logon events reviewed for compromised account activity</td>
+          </tr>
+
+          <tr>
+            <td>Event ID</td>
+            <td>4769</td>
+            <td>Kerberos TGS request events associated with Kerberoasting and RBCD activity</td>
+          </tr>
+
+          <tr>
+            <td>Event ID</td>
+            <td>4886</td>
+            <td>Certificate request submitted to Certificate Authority</td>
+          </tr>
+
+          <tr>
+            <td>RCE / SQLi Activity Time</td>
+            <td>2025-09-18 02:25</td>
+            <td>Observed time when SQL injection exploitation activity initiated</td>
+          </tr>
+
+          <tr>
+            <td>Kerberoasting Time</td>
+            <td>2025-09-18 02:40:44.913</td>
+            <td>TGS request for alonso.x using RC4 encryption</td>
+          </tr>
+
+          <tr>
+            <td>Compromised Logon Time</td>
+            <td>2025-09-18 02:50:30.741</td>
+            <td>Successful logon tied to alonso.x from the malicious IP</td>
+          </tr>
+
+          <tr>
+            <td>RBCD Ticket Time</td>
+            <td>2025-09-18 02:50:54.911</td>
+            <td>MADRID$ requested a TGS for APP-BKUP01$</td>
+          </tr>
+
+          <tr>
+            <td>AD CS Request Time</td>
+            <td>2025-09-18 02:54:24 UTC</td>
+            <td>Certificate request submitted for Administrator</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
