@@ -41,7 +41,7 @@ PECmd.exe -d "C:\Users\LetsDefend\Desktop\ChallengeFile\AS-REP\corrado\prefetch"
 
     <!-- TASK 1 -->
     <div class="task">
-      <h3>1️⃣ While reviewing the logs, Janice identified suspicious Kerberos ticket requests, potentially indicating an AS-REP attack. What is the exact time this attack occurred?</h3>
+      <h3>1: While reviewing the logs, Janice identified suspicious Kerberos ticket requests, potentially indicating an AS-REP attack. What is the exact time this attack occurred?</h3>
 
       <p><strong>Answer:</strong></p>
       <pre><code>2024-10-05 14:42:44</code></pre>
@@ -100,7 +100,7 @@ IpPort: 60537</code></pre>
 
     <!-- TASK 2 -->
     <div class="task">
-      <h3>2️⃣ What user account did the attacker target during this Kerberos attack?</h3>
+      <h3>2: What user account did the attacker target during this Kerberos attack?</h3>
 
       <p>This question was answered during the previous analysis.</p>
       <p>The targeted user account was:</p>
@@ -112,7 +112,7 @@ IpPort: 60537</code></pre>
 
     <!-- TASK 3 -->
     <div class="task">
-      <h3>3️⃣ What is the SID associated with the targeted user account?</h3>
+      <h3>3️: What is the SID associated with the targeted user account?</h3>
 
       <p>The Security Identifier (SID) for the targeted account was also obtained from the same Kerberos event.</p>
 
@@ -124,7 +124,7 @@ IpPort: 60537</code></pre>
 
     <!-- TASK 4 -->
     <div class="task">
-      <h3>4️⃣ What encryption algorithm was used in this Kerberos ticket request?</h3>
+      <h3>4️: What encryption algorithm was used in this Kerberos ticket request?</h3>
 
       <p>This was again identified from the Event ID 4768 log.</p>
       <p>The Kerberos ticket request used:</p>
@@ -144,7 +144,7 @@ IpPort: 60537</code></pre>
 
     <!-- TASK 5 -->
     <div class="task">
-      <h3>5️⃣ What is the IP and port number that was used to request the ticket?</h3>
+      <h3>5️: What is the IP and port number that was used to request the ticket?</h3>
 
       <p>
         By analyzing the same Kerberos TGT request containing weak encryption and disabled pre-authentication, the source IP and port were identified as:
@@ -167,7 +167,7 @@ IpPort: 60537</code></pre>
 
     <!-- TASK 6 -->
     <div class="task">
-      <h3>6️⃣ The attacker managed to crack the hash and used it to log into the compromised machine. When was their first successful logon?</h3>
+      <h3>6️: The attacker managed to crack the hash and used it to log into the compromised machine. When was their first successful logon?</h3>
 
       <p>
         To answer this question, I pivoted to Corrado’s workstation Security logs, as the attacker likely cracked the AS-REP hash and reused it to authenticate to the system.
@@ -207,7 +207,7 @@ TargetUserName: NT AUTHORITY\ANONYMOUS LOGON</code></pre>
 
     <!-- TASK 7 -->
     <div class="task">
-      <h3>7️⃣ Once inside, the attacker began exploring the system. What was the first command they executed?</h3>
+      <h3>7️: Once inside, the attacker began exploring the system. What was the first command they executed?</h3>
 
       <p><strong>Answer:</strong></p>
       <pre><code>whoami.exe</code></pre>
@@ -268,7 +268,7 @@ TargetUserName: NT AUTHORITY\ANONYMOUS LOGON</code></pre>
 
     <!-- TASK 8 -->
     <div class="task">
-      <h3>8️⃣ When did the attacker execute this command exactly?</h3>
+      <h3>8️: When did the attacker execute this command exactly?</h3>
 
       <p>
         This was determined from the Prefetch runtime metadata associated with whoami.exe.
