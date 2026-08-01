@@ -1635,3 +1635,354 @@ body.light-mode .theme-flash {
 .cyberdefenders-profile-link:hover span {
   transform: translate(2px, -2px);
 }
+/* =========================================
+   PHONE-SPECIFIC PROFILE + SCROLL FIX
+========================================= */
+
+@media screen and (max-width: 600px) {
+  html {
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body {
+    width: 100%;
+    min-height: 100%;
+    height: auto !important;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    padding: 0.65rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .layout {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100%;
+    min-height: 100%;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Compact mobile profile card */
+  .sidebar {
+    position: relative !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 1rem !important;
+  }
+
+  .profile {
+    gap: 5px;
+  }
+
+  .avatar-box {
+    padding: 6px;
+  }
+
+  .avatar-box img {
+    width: 74px;
+    height: 74px;
+  }
+
+  .profile h1 {
+    font-size: 1.05rem;
+  }
+
+  .title-badge {
+    font-size: 0.7rem;
+    padding: 4px 9px;
+  }
+
+  /* Make email/location more compact */
+  .contact-info {
+    margin-top: 0.65rem;
+  }
+
+  .contact-info .info {
+    margin-bottom: 0.3rem;
+  }
+
+  .sidebar .contact-info span {
+    font-size: 0.68rem;
+    margin-bottom: 2px;
+  }
+
+  .sidebar .contact-info p {
+    font-size: 0.82rem;
+    line-height: 1.2;
+    margin-bottom: 0.2rem;
+  }
+
+  .socials {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  /* Compact CyberDefenders card */
+  .cyberdefenders-card {
+    margin-top: 0.75rem;
+    padding: 10px;
+    border-radius: 13px;
+  }
+
+  .cyberdefenders-header {
+    margin-bottom: 7px;
+    font-size: 0.63rem;
+  }
+
+  .cyberdefenders-badge-link {
+    padding: 5px;
+  }
+
+  .cyberdefenders-badge {
+    width: auto;
+    max-width: 100%;
+    max-height: 75px;
+    object-fit: contain;
+  }
+
+  .cyberdefenders-profile-link {
+    margin-top: 7px;
+    padding: 7px 10px;
+    font-size: 0.72rem;
+  }
+
+  /* Ensure main content follows the profile */
+  .content {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .content-card {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0.8rem;
+  }
+
+  /* Mobile navigation */
+  .top-nav {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+    gap: 0.4rem;
+    padding: 0.45rem;
+    border-radius: 14px;
+    margin-bottom: 1rem;
+  }
+
+  .nav-btn {
+    width: 100%;
+    min-width: 0;
+    padding: 0.6rem 0.35rem;
+    font-size: 0.72rem;
+  }
+
+  .nav-btn:last-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Disable desktop panel slider */
+  .panel-viewport {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .panels {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    transform: none !important;
+    overflow: visible !important;
+  }
+
+  .panel {
+    display: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    transform: none !important;
+    padding: 0.65rem 0.25rem;
+  }
+
+  .panel.active {
+    display: block !important;
+  }
+}
+/* =========================================
+   FINAL PHONE LAYOUT
+========================================= */
+
+@media screen and (max-width: 600px) {
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    height: auto;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  body {
+    padding: 0.65rem;
+  }
+
+  .layout {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .sidebar {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin-bottom: 0.75rem;
+  }
+
+  .content {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .content-card {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* Navigation remains its own card */
+  .top-nav {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100% !important;
+    margin: 0 0 0.75rem !important;
+    padding: 0.45rem !important;
+    gap: 0.4rem;
+    border-radius: 14px;
+    background: var(--nav-bg) !important;
+  }
+
+  .nav-btn {
+    width: 100%;
+    min-width: 0;
+    padding: 0.6rem 0.3rem;
+    font-size: 0.72rem;
+  }
+
+  .nav-btn:last-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Fully remove desktop slider behavior */
+  .panel-viewport {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .panels {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    transform: none !important;
+    transition: none !important;
+    overflow: visible !important;
+  }
+
+  .panel {
+    display: none !important;
+    position: static !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 1rem !important;
+    margin: 0 !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    pointer-events: auto !important;
+    overflow: visible !important;
+    background: linear-gradient(
+      180deg,
+      var(--panel-grad-1),
+      var(--panel-grad-2)
+    ) !important;
+    border-radius: 14px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .panel.active {
+    display: block !important;
+  }
+
+  /* Force About content to participate normally */
+  .panel.active > *,
+  .panel.active .panel-inner,
+  .panel.active .about-content,
+  .panel.active .about-content p {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    overflow: visible !important;
+  }
+
+  .about-content p {
+    margin-bottom: 1.25rem;
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  .doing-grid,
+  .projects-grid,
+  .form-row {
+    grid-template-columns: 1fr !important;
+  }
+}
