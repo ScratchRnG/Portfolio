@@ -52,7 +52,7 @@ For this challenge, we are given a ZIP file which contained <code>auth.log</code
 
     <!-- TASK 1 -->
     <div class="task">
-      <h3>1️⃣ Task 1: What username did the attacker query the AI chatbot to check for its existence?</h3>
+      <h3>Task 1: What username did the attacker query the AI chatbot to check for its existence?</h3>
 
       <p>
 To identify the username queried by the attacker, analysis began with the network traffic captured in the PCAP file using Wireshark. This approach was taken because the attacker interacted with the AI chatbot through a web interface, making HTTP traffic the most relevant source of evidence. Additionally, the scenario description explicitly references unusual HTTP activity associated with the chatbot.
@@ -108,7 +108,7 @@ These interactions confirm that the attacker was actively probing the AI chatbot
 
     <!-- TASK 2 -->
     <div class="task">
-      <h3>2️⃣ Task 2: What is the name of the AI chatbot that the attacker unsuccessfully attempted to manipulate into revealing data stored on its server?</h3>
+      <h3>Task 2: What is the name of the AI chatbot that the attacker unsuccessfully attempted to manipulate into revealing data stored on its server?</h3>
 
       <p>
 To determine this, the initial HTML content of the AI chatbot interface accessed by the attacker was analyzed. As observed in the prior interaction, the adversary attempted to socially engineer the chatbot by claiming to be sick and in need of a doctor, which resulted in a POST request to the endpoint <code>http://10.10.0.74:5000/user_manage_chatbot/ask</code>.
@@ -177,7 +177,7 @@ From the HTML response, the navigation bar explicitly labels the endpoint <code>
 
     <!-- TASK 3 -->
     <div class="task">
-      <h3>3️⃣ Task 3: On which server technology is the AI chatbot running?</h3>
+      <h3>Task 3: On which server technology is the AI chatbot running?</h3>
 
       <p>
 This was seen in the previous HTML analyzed. If we look at the begining, we identify the following: <code>Server: Werkzeug/3.1.3 Python/3.12.7</code>
@@ -194,7 +194,7 @@ This was seen in the previous HTML analyzed. If we look at the begining, we iden
 
     <!-- TASK 4 -->
     <div class="task">
-      <h3>4️⃣ Task 4: Which AI chatbot disclosed to the attacker that it could assist in viewing webpage content and files stored on the server?</h3>
+      <h3>Task 4: Which AI chatbot disclosed to the attacker that it could assist in viewing webpage content and files stored on the server?</h3>
 
       <p>
 The AI bot that disclosed information was: <code>Web &amp; Files Chatbot</code>.
@@ -229,7 +229,7 @@ As shown in these interactions, the chatbot explicitly confirms its ability to a
 
     <!-- TASK 5 -->
     <div class="task">
-      <h3>5️⃣ Task 5: Which file exposed user credentials to the attacker?</h3>
+      <h3>Task 5: Which file exposed user credentials to the attacker?</h3>
 
       <p>
 Answer == creds.txt.
@@ -270,7 +270,7 @@ exposed credentials :: <code>nnoel:debian </code>
 
     <!-- TASK 6 -->
     <div class="task">
-      <h3>6️⃣ Task 6: What time did the attacker use the exposed credentials to log in?</h3>
+      <h3>Task 6: What time did the attacker use the exposed credentials to log in?</h3>
 
       <p>
 Time == <code>06:49:44</code>
@@ -296,7 +296,7 @@ This log entry confirms that the attacker used the exposed credentials to authen
 
     <!-- TASK 7 -->
     <div class="task">
-      <h3>7️⃣ Task 7: Which CVE was exploited by the attacker to escalate privileges?</h3>
+      <h3>Task 7: Which CVE was exploited by the attacker to escalate privileges?</h3>
 
       <p>
 <strong>Answer:</strong> <code>CVE-2023-44467</code>
@@ -336,7 +336,7 @@ Source:
 
     <!-- TASK 8 -->
     <div class="task">
-      <h3>8️⃣ Task 8: Which function in the Python library led to the exploitation of the above vulnerability?</h3>
+      <h3>Task 8: Which function in the Python library led to the exploitation of the above vulnerability?</h3>
 
       <p>
 Answer == <code>__import__</code>.
@@ -349,7 +349,7 @@ This was observed to be the case in Task 7.
 
     <!-- TASK 9 -->
     <div class="task">
-      <h3>9️⃣ Task 9: What time did the attacker successfully execute commands with root privileges?</h3>
+      <h3>Task 9: What time did the attacker successfully execute commands with root privileges?</h3>
 
       <p>
 Answer == <code>06:56:41</code>
