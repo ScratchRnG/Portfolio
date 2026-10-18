@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VaultBreak</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+
+  <style>
+    .video-card {
+      margin: 2rem 0;
+      padding: 1.5rem;
+      background: linear-gradient(180deg, #1c1c1c, #141414);
+      border: 1px solid #2a2a2a;
+      border-radius: 18px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+    }
+
+    .video-card h3 {
+      margin-top: 0;
+      color: #ffffff;
+    }
+
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid #2a2a2a;
+      background: #0f0f0f;
+      margin-top: 1rem;
+    }
+
+    .video-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .video-link {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.65rem 1.25rem;
+      background: var(--accent);
+      color: #000;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .video-link:hover {
+      box-shadow: 0 12px 30px rgba(245, 194, 107, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .timeline {
+      margin-top: 1.5rem;
+      border-left: 2px solid rgba(245, 194, 107, 0.55);
+      padding-left: 1.5rem;
+    }
+
+    .timeline-item {
+      margin-bottom: 1.5rem;
+      position: relative;
+      padding: 1rem 1.25rem;
+      background: #171717;
+      border: 1px solid #2a2a2a;
+      border-radius: 14px;
+    }
+
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: -1.9rem;
+      top: 1.25rem;
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(245, 194, 107, 0.7);
+    }
+
+    .timeline-time {
+      color: var(--accent);
+      font-weight: 700;
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.9rem;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0 2rem;
+    }
+
+    .summary-card {
+      background: #171717;
+      border: 1px solid #2a2a2a;
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+
+    .summary-card span {
+      display: block;
+      color: var(--accent);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+      font-weight: 700;
+    }
+
+    .summary-card p {
+      margin: 0;
+      color: #cfcfcf;
+    }
+  </style>
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>VaultBreak</h1>
+    <a class="back-link" href="../index.html">← Back to Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+
+    <h2>Scenario:</h2>
+    <p>
+      In May 2025, a financial services firm detected suspicious activity after an employee opened an urgent document received via email. The workstation exhibited abnormal behavior, including unexpected processes and unusual network connections. Security teams identified evidence of unauthorized system modifications and potential persistence mechanisms.
+    </p>
+
+    <p>
+      The investigation focused on reconstructing the attack sequence from the initial phishing interaction through malware execution, process injection, privilege escalation, persistence, and command-and-control activity.
+    </p>
+
+    <p>
+      Collected forensic artifacts included browser history, process creation telemetry, PowerShell activity, Sysmon events, registry modifications, WMI persistence records, scheduled task artifacts, and network connection telemetry.
+    </p>
+
+    <p>
+      The objective was to determine how the compromise occurred, identify the malicious execution chain, uncover the persistence mechanisms used, and trace the infrastructure supporting command-and-control communications.
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- Video Section -->
+   <div class="video-card">
+  <h3>Video Walkthrough</h3>
+  <p>
+    The full VaultBreak investigation walkthrough is available on my YouTube channel.
+    The video covers the attack chain from the phishing-delivered malicious document
+    through PowerShell payload delivery, process injection, SYSTEM-level execution,
+    WMI and scheduled-task persistence, and command-and-control analysis.
+  </p>
+
+  <div class="video-wrapper">
+    <iframe
+      src="https://www.youtube.com/embed/qI94DJ_Mgvc"
+      title="VaultBreak Video Walkthrough"
+      loading="lazy"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allowfullscreen>
+    </iframe>
+  </div>
+
+  <a class="video-link"
+     href="https://youtu.be/qI94DJ_Mgvc"
+     target="_blank"
+     rel="noopener noreferrer">
+    Watch on YouTube
+  </a>
+</div>
+
+    <hr class="section-divider">
+
+    <!-- Executive Summary -->
+    <h3>Executive Summary</h3>
+    <p>
+      The attack began when the user <code>nevans</code> downloaded the macro-enabled document <code>Financial_Support.docm</code> after interacting with a phishing link. Browser history analysis identified the download at <code>2025-05-19 15:58:25.371584</code>.
+    </p>
+
+    <p>
+      After the document's macro executed, PowerShell retrieved a remote executable named <code>payload.exe</code> and stored it in the user's temporary directory under a randomized filename using the pattern <code>msupdate-####.exe</code>. In this incident, the payload was written and executed as <code>msupdate-2381.exe</code>. The malware also created the configuration file <code>content.inf</code> shortly after execution.
+    </p>
+
+    <p>
+      The payload later performed process injection into <code>notepad.exe</code>, helping explain subsequent anomalous Notepad activity. At <code>2025-05-19 16:09:24 UTC</code>, <code>notepad.exe</code>, associated with <code>WIN-DMZ0\nevans</code>, spawned <code>cmd.exe</code> running as <code>NT AUTHORITY\SYSTEM</code> with PID <code>10660</code>. This represented a major escalation in execution context and enabled the attacker to establish deeper persistence.
+    </p>
+
+    <p>
+      Persistence was established through both Windows Management Instrumentation and Task Scheduler. The WMI mechanism used the compromised account <code>WIN-DMZ0\nevans</code> and was associated with MITRE ATT&amp;CK technique <code>T1546.003</code>. The attacker also created the scheduled task <code>Microsoft\Windows\UpdateOrchestrator\UpdateAssistant</code> and modified its <code>SD</code> registry value under TaskCache. Shortly afterward, a WMI filter-to-consumer binding event linked the malicious persistence components using SID <code>S-1-5-21-403280985-4081385913-4248903659-2063598570</code>.
+    </p>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <span>Initial Access</span>
+        <p>Phishing link led to the download of <code>Financial_Support.docm</code>.</p>
+      </div>
+
+      <div class="summary-card">
+        <span>Payload Execution</span>
+        <p>PowerShell downloaded and launched <code>msupdate-2381.exe</code> from the user's Temp directory.</p>
+      </div>
+
+      <div class="summary-card">
+        <span>Privilege Escalation</span>
+        <p><code>notepad.exe</code> spawned <code>cmd.exe</code> as SYSTEM with PID <code>10660</code>.</p>
+      </div>
+
+      <div class="summary-card">
+        <span>Persistence</span>
+        <p>WMI event subscription and the <code>UpdateAssistant</code> scheduled task were used for recurring execution.</p>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- Timeline -->
+    <h3>Attack Timeline</h3>
+
+    <div class="timeline">
+
+      <div class="timeline-item">
+        <span class="timeline-time">2025-05-19 15:58:25.371584</span>
+        <p>
+          The user <code>nevans</code> downloaded the malicious macro-enabled document <code>Financial_Support.docm</code> after clicking a link delivered through phishing.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">Macro Execution</span>
+        <p>
+          The malicious document executed a PowerShell command that selected the user's temporary directory, generated a randomized filename using the format <code>msupdate-####.exe</code>, and downloaded a remote <code>payload.exe</code> into that location.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">Payload Delivery</span>
+        <p>
+          The downloaded payload was saved and launched as <code>msupdate-2381.exe</code>. The <code>msupdate</code> naming convention was likely intended to resemble a legitimate Microsoft update component.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">Configuration Creation</span>
+        <p>
+          Shortly after execution, the malware created <code>content.inf</code>, which was used as a configuration file for the malicious payload.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">2025-05-19 16:04:58</span>
+        <p>
+          Sysmon Event ID 8 activity showed <code>msupdate-2381.exe</code> injecting into <code>notepad.exe</code>, indicating process injection and helping explain later execution attributed to the legitimate Windows process.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">2025-05-19 16:09:24 UTC</span>
+        <p>
+          <code>notepad.exe</code> with PID <code>11028</code>, associated with <code>WIN-DMZ0\nevans</code>, spawned <code>C:\Windows\System32\cmd.exe</code> as <code>NT AUTHORITY\SYSTEM</code>. The command shell ran with PID <code>10660</code>.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">2025-05-19 16:09:32 UTC</span>
+        <p>
+          <code>svchost.exe</code> running as SYSTEM modified the scheduled-task security descriptor at <code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\UpdateAssistant\SD</code>.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">Scheduled Task Persistence</span>
+        <p>
+          The attacker established persistence through the task <code>Microsoft\Windows\UpdateOrchestrator\UpdateAssistant</code>, which was configured to execute the malicious encoded PowerShell activity again.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">WMI Persistence</span>
+        <p>
+          The compromised account <code>WIN-DMZ0\nevans</code> was used to create a WMI event filter designed to trigger malicious execution after approximately 10 minutes of system uptime. This behavior maps to MITRE ATT&amp;CK <code>T1546.003</code>.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">2025-05-19 16:09:44 UTC</span>
+        <p>
+          A WMI filter-to-consumer binding event connected the persistence components. The associated SID was <code>S-1-5-21-403280985-4081385913-4248903659-2063598570</code>.
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <span class="timeline-time">Command and Control</span>
+        <p>
+          Network telemetry showed the malicious PowerShell activity communicating with external infrastructure used for command and control. Replace <code>3[.]127[.]36[.]5:8443</code> below once the final IP address and destination port are confirmed from the network events.
+        </p>
+      </div>
+
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- IOC TABLE -->
+    <div class="task">
+      <h3>Indicators of Compromise (IOC)</h3>
+
+      <table class="ioc-table">
+        <thead>
+          <tr>
+            <th>IOC Type</th>
+            <th>Indicator</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr>
+            <td>Compromised User</td>
+            <td>WIN-DMZ0\nevans</td>
+            <td>User associated with the malicious document download and WMI persistence activity</td>
+          </tr>
+
+          <tr>
+            <td>Malicious Document</td>
+            <td>Financial_Support.docm</td>
+            <td>Macro-enabled document downloaded after the phishing interaction</td>
+          </tr>
+
+          <tr>
+            <td>Download Time</td>
+            <td>2025-05-19 15:58:25.371584</td>
+            <td>Timestamp identified in browser history for the malicious document download</td>
+          </tr>
+
+          <tr>
+            <td>Malware Payload</td>
+            <td>msupdate-2381.exe</td>
+            <td>Randomized executable name used for the downloaded malware payload</td>
+          </tr>
+
+          <tr>
+            <td>Remote Payload Name</td>
+            <td>payload.exe</td>
+            <td>Executable retrieved by PowerShell before being renamed in the Temp directory</td>
+          </tr>
+
+          <tr>
+            <td>Configuration File</td>
+            <td>content.inf</td>
+            <td>Configuration file created shortly after malware execution</td>
+          </tr>
+
+          <tr>
+            <td>Injected Process</td>
+            <td>notepad.exe</td>
+            <td>Legitimate Windows process targeted by the malware for process injection</td>
+          </tr>
+
+          <tr>
+            <td>Injected Process PID</td>
+            <td>11028</td>
+            <td>PID of the Notepad process later associated with privileged command execution</td>
+          </tr>
+
+          <tr>
+            <td>SYSTEM Shell</td>
+            <td>cmd.exe</td>
+            <td>Command interpreter spawned from Notepad under NT AUTHORITY\SYSTEM</td>
+          </tr>
+
+          <tr>
+            <td>SYSTEM Shell PID</td>
+            <td>10660</td>
+            <td>PID of the privileged command shell</td>
+          </tr>
+
+          <tr>
+            <td>Scheduled Task</td>
+            <td>Microsoft\Windows\UpdateOrchestrator\UpdateAssistant</td>
+            <td>Task Scheduler persistence path created by the attacker</td>
+          </tr>
+
+          <tr>
+            <td>Registry Artifact</td>
+            <td>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\UpdateAssistant\SD</td>
+            <td>Scheduled task security descriptor modified during persistence activity</td>
+          </tr>
+
+          <tr>
+            <td>WMI Binding SID</td>
+            <td>S-1-5-21-403280985-4081385913-4248903659-2063598570</td>
+            <td>SID associated with the WMI filter-to-consumer binding event</td>
+          </tr>
+
+          <tr>
+            <td>MITRE Technique</td>
+            <td>T1546.003</td>
+            <td>Windows Management Instrumentation Event Subscription persistence</td>
+          </tr>
+
+          <tr>
+            <td>C2 Infrastructure</td>
+            <td>3[.]127[.]36[.]5:8443</td>
+            <td>External command-and-control endpoint observed in PowerShell/network telemetry</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- Defensive Takeaways -->
+    <div class="task">
+      <h3>Defensive Takeaways</h3>
+
+      <ul>
+        <li>Monitor email and web telemetry for macro-enabled Office documents downloaded from external or newly observed infrastructure.</li>
+        <li>Alert on PowerShell commands that download executables into user-writable paths such as <code>%TEMP%</code>, especially when randomized filenames are used.</li>
+        <li>Hunt for suspicious child-process relationships involving applications such as <code>notepad.exe</code> spawning shells or scripting interpreters.</li>
+        <li>Monitor Sysmon Event ID 8 for remote-thread creation and other process-injection indicators targeting legitimate Windows processes.</li>
+        <li>Alert when user-context processes result in child processes running as <code>NT AUTHORITY\SYSTEM</code>.</li>
+        <li>Review modifications to TaskCache <code>SD</code> values because security descriptor manipulation may be associated with hidden or tampered scheduled tasks.</li>
+        <li>Detect permanent WMI event subscriptions by monitoring filter, consumer, and filter-to-consumer binding creation events.</li>
+        <li>Correlate persistence events across Task Scheduler, WMI, Registry, PowerShell, and process telemetry rather than investigating them independently.</li>
+        <li>Monitor outbound connections from PowerShell and newly created executables to unusual external IP addresses or non-standard destination ports.</li>
+      </ul>
+    </div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
