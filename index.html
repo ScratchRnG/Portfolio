@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portfolio</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=8" />
+  <link rel="stylesheet" href="assets/css/style.css?v=103" />
 </head>
 <body>
 <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
@@ -14,14 +14,26 @@
 <!-- Loading Screen -->
 <div id="loader">
   <div class="loader-content">
-    <div class="star">⭐</div>
-    <h1>The Star Of Hope</h1>
-    <p>Initializing…</p>
+    <div class="star" aria-hidden="true"></div>
+    <h1>Showtime</h1>
+    <p>Shuffling the deck…</p>
   </div>
 </div>
 
   <!-- ===== LAYOUT WRAPPER ===== -->
   <div class="layout">
+
+    <!-- Dock navigation -->
+<!-- Top Navigation -->
+        <nav class="top-nav">
+          <button class="nav-btn active" data-index="0">About</button>
+          <button class="nav-btn" data-index="1">Certifications/Certificates</button>
+          <button class="nav-btn" data-index="2">Projects</button>
+          <button class="nav-btn" data-index="3">Write-ups</button>
+          <button class="nav-btn" data-index="4">Experience</button>
+          <button class="nav-btn" data-index="5">Contact</button>
+        </nav>
+
 
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -37,7 +49,7 @@
       <div class="contact-info">
         <div class="info">
           <span>Email</span>
-          <p>joandimas639@gmail.com</p>
+          <p>cochorng@gmail.com</p>
         </div>
         <div class="info">
           <span>Location</span>
@@ -95,16 +107,7 @@
     <main class="content">
       <div class="content-card">
 
-        <!-- Top Navigation -->
-        <nav class="top-nav">
-          <button class="nav-btn active" data-index="0">About</button>
-          <button class="nav-btn" data-index="1">Projects</button>
-          <button class="nav-btn" data-index="2">Write-ups</button>
-          <button class="nav-btn" data-index="3">Experience</button>
-          <button class="nav-btn" data-index="4">Contact</button>
-        </nav>
-
-        <!-- Slider Viewport -->
+<!-- Slider Viewport -->
         <div class="panel-viewport">
           <div class="panels">
 
@@ -215,6 +218,22 @@
                 </div>
 
                 <div class="doing-card">
+                  <div class="doing-icon">🎯</div>
+                  <div class="doing-content">
+                    <h4>Threat Hunting</h4>
+                    <p>Proactively searching logs and telemetry for hidden adversary activity.</p>
+                  </div>
+                </div>
+
+                <div class="doing-card">
+                  <div class="doing-icon">🧬</div>
+                  <div class="doing-content">
+                    <h4>Digital Forensics</h4>
+                    <p>Examining artifacts and evidence to reconstruct what happened.</p>
+                  </div>
+                </div>
+
+                <div class="doing-card">
                   <div class="doing-icon">💻</div>
                   <div class="doing-content">
                     <h4>Constant Growth</h4>
@@ -223,113 +242,159 @@
                 </div>
               </div>
 
-              <h3 class="section-subtitle">Certifications</h3>
+              </section>
+
+            <!-- CERTIFICATIONS -->
+            <section class="panel certifications">
+              <div class="panel-inner">
+                <h2>Certifications / Certificates</h2>
+              </div>
+
 
               <div class="certifications-grid">
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="Hack The Box CWES: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/CWES.png" alt="Hack The Box CWES">
                   </div>
                   <div class="cert-content">
                     <h4>Hack The Box CWES</h4>
                     <p>Hack The Box</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>Hack The Box CWES</h4><p>Certified Web Exploitation Specialist: hands-on web application pentesting, from finding bugs to chaining them into full compromise.</p><ul class="cert-skills"><li>Injection & XSS</li><li>Auth attacks</li><li>SSRF / XXE</li><li>Code review</li><li>Exploit chaining</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="Hack The Box CDSA: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/CDSA.png" alt="Hack The Box CDSA">
                   </div>
                   <div class="cert-content">
                     <h4>Hack The Box CDSA</h4>
                     <p>Hack The Box</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>Hack The Box CDSA</h4><p>Certified Defensive Security Analyst: SOC work end to end, detecting, investigating and responding to real attacker activity.</p><ul class="cert-skills"><li>Log analysis</li><li>Threat hunting</li><li>Incident response</li><li>SIEM</li><li>DFIR</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="TryHackMe SAL1: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/SAL1.png" alt="TryHackMe SAL1">
                   </div>
                   <div class="cert-content">
                     <h4>TryHackMe SAL1</h4>
                     <p>TryHackMe</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>TryHackMe SAL1</h4><p>Security Analyst Level 1: day-to-day SOC analyst skills for triaging and investigating alerts.</p><ul class="cert-skills"><li>Alert triage</li><li>Phishing analysis</li><li>SIEM</li><li>Endpoint & network monitoring</li><li>IR basics</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="Microsoft SC-200: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/SC-200.png" alt="Microsoft SC-200">
                   </div>
                   <div class="cert-content">
                     <h4>Microsoft SC-200</h4>
                     <p>Microsoft</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>Microsoft SC-200</h4><p>Security Operations Analyst: threat detection, hunting and response across the Microsoft security stack.</p><ul class="cert-skills"><li>Microsoft Sentinel</li><li>Defender XDR</li><li>KQL</li><li>Threat hunting</li><li>Incident response</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="Microsoft SC-900: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/SC-900.png" alt="Microsoft SC-900">
                   </div>
                   <div class="cert-content">
                     <h4>Microsoft SC-900</h4>
                     <p>Microsoft</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>Microsoft SC-900</h4><p>Security, Compliance and Identity Fundamentals: the core concepts behind Microsoft's security ecosystem.</p><ul class="cert-skills"><li>Zero Trust</li><li>Entra ID</li><li>Defender</li><li>Purview</li><li>Compliance</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="CompTIA A+: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/A+.png" alt="CompTIA A+">
                   </div>
                   <div class="cert-content">
                     <h4>CompTIA A+</h4>
                     <p>CompTIA</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>CompTIA A+</h4><p>Core IT foundations: supporting and troubleshooting hardware, operating systems and devices.</p><ul class="cert-skills"><li>Hardware</li><li>Windows & Linux</li><li>Troubleshooting</li><li>Networking basics</li><li>Mobile devices</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="CompTIA Network+: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/NET+.png" alt="CompTIA Network+">
                   </div>
                   <div class="cert-content">
                     <h4>CompTIA Network+</h4>
                     <p>CompTIA</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>CompTIA Network+</h4><p>How networks work and break: designing, configuring and troubleshooting them.</p><ul class="cert-skills"><li>TCP/IP & DNS</li><li>Routing & switching</li><li>Wireless</li><li>Network security</li><li>Troubleshooting</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="CompTIA Security+: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/SEC+.png" alt="CompTIA Security+">
                   </div>
                   <div class="cert-content">
                     <h4>CompTIA Security+</h4>
                     <p>CompTIA</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>CompTIA Security+</h4><p>Baseline security skills: threats, controls, identity and risk across modern environments.</p><ul class="cert-skills"><li>Threats & vulnerabilities</li><li>Cryptography</li><li>IAM</li><li>Risk management</li><li>Incident response</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="CompTIA CySA+: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/CYSA+.png" alt="CompTIA CySA+">
                   </div>
                   <div class="cert-content">
                     <h4>CompTIA CySA+</h4>
                     <p>CompTIA</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>CompTIA CySA+</h4><p>Cybersecurity Analyst: detecting and analyzing threats and managing vulnerabilities using behavioral analytics.</p><ul class="cert-skills"><li>Threat detection</li><li>Vulnerability management</li><li>Log & SIEM analysis</li><li>Threat intel</li><li>Incident response</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
-                <div class="cert-card">
-                  <div class="cert-badge-wrap">
+                <div class="cert-card" tabindex="0" role="button" aria-label="CompTIA Pentest+: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
                     <img src="assets/images/badges/PENTEST+.png" alt="CompTIA Pentest+">
                   </div>
                   <div class="cert-content">
                     <h4>CompTIA Pentest+</h4>
                     <p>CompTIA</p>
-                  </div>
-                </div>
+                  </div></div>
+<div class="cert-back"><h4>CompTIA Pentest+</h4><p>Penetration testing from planning to reporting, including recon, scanning and exploitation.</p><ul class="cert-skills"><li>Recon</li><li>Vuln scanning</li><li>Exploitation</li><li>Attack planning</li><li>Reporting</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
 
               </div>
 
-            </section>
+            
+              <h3 class="section-subtitle">Certificates</h3>
+
+              <div class="certifications-grid">
+
+                <div class="cert-card" tabindex="0" role="button" aria-label="XINTRA Virus Vipers: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
+                    <img src="assets/images/badges/xintra-virus.png" alt="XINTRA" onerror="this.replaceWith(Object.assign(document.createElement('b'),{className:'cert-fallback',textContent:'XINTRA'}))">
+                  </div>
+                  <div class="cert-content">
+                    <h4>XINTRA Virus Vipers</h4>
+                    <p>XINTRA · APT Simulation</p>
+                  </div></div>
+<div class="cert-back"><h4>XINTRA Virus Vipers</h4><p>APT10-style intrusion at an AI-companion company, reached through its managed security provider's VPN. Investigated end to end in an ELK SIEM and Windows forensic artifacts: phishing, credential dumping, lateral movement, timestomping and exfiltration.</p><ul class="cert-skills"><li>SIEM hunting</li><li>Sysmon & event logs</li><li>Windows forensics</li><li>Timeline analysis</li><li>Phishing & loaders</li><li>Supply-chain compromise</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
+
+                <div class="cert-card" tabindex="0" role="button" aria-label="XINTRA Waifu University: show what it covers">
+<div class="cert-front"><div class="cert-badge-wrap">
+                    <img src="assets/images/badges/xintra.png" alt="XINTRA" onerror="this.replaceWith(Object.assign(document.createElement('b'),{className:'cert-fallback',textContent:'XINTRA'}))">
+                  </div>
+                  <div class="cert-content">
+                    <h4>XINTRA Waifu University</h4>
+                    <p>XINTRA · APT Simulation</p>
+                  </div></div>
+<div class="cert-back"><h4>XINTRA Waifu University</h4><p>ALPHV/BlackCat-style ransomware attack on a university: MFA fatigue into Entra ID, privilege escalation, Cobalt Strike, credential harvesting and encryption. Worked from identity logs, Windows events and NTFS artifacts.</p><ul class="cert-skills"><li>Entra ID sign-in logs</li><li>MFA fatigue</li><li>Cobalt Strike</li><li>MFT & USN journal</li><li>Lateral movement</li><li>MITRE ATT&CK</li></ul></div><span class="cert-hint" aria-hidden="true">Click to flip</span>
+</div>
+
+                </div>
+
+</section>
 
             <!-- PROJECTS -->
             <section class="panel projects">
@@ -396,6 +461,14 @@
   Note: This portfolio is an evolving work in progress and does not currently display all my projects. Additional projects and write-ups are continuously being documented and added.
 </p>
                 <div class="projects-grid">
+
+		  <a href="writeups/elpaco-team.html" class="project-card">
+                    <div class="project-meta">
+                      <span class="project-tag">Cyberdefenders Lab · DFIR </span>
+                      <h3> Elpaco Team Lab</h3>
+                      <p>Cyberdefenders lab walkthrough.</p>
+                    </div>
+                  </a>	
                   
 		  <a href="writeups/vaultbreak.html" class="project-card">
                     <div class="project-meta">
@@ -409,6 +482,14 @@
                     <div class="project-meta">
                       <span class="project-tag">Cyberdefenders Lab · DFIR | EndPoint forensics</span>
                       <h3>Fog Ransomware - Fluttering Scorpius</h3>
+                      <p>Cyberdefenders lab walkthrough.</p>
+                    </div>
+                  </a>
+
+		  <a href="writeups/bumblebee-gold-cabin.html" class="project-card">
+                    <div class="project-meta">
+                      <span class="project-tag">Cyberdefenders Lab · Threat-Hunting | Elastic</span>
+                      <h3> BumbleBee Gold Cabin</h3>
                       <p>Cyberdefenders lab walkthrough.</p>
                     </div>
                   </a>		  
@@ -602,39 +683,46 @@
 
 <div class="skills-grid">
 
-  <!-- Identity & Microsoft Platform -->
   <span class="skill-pill">Microsoft Entra</span>
   <span class="skill-pill">Active Directory</span>
   <span class="skill-pill">Microsoft Defender XDR</span>
   <span class="skill-pill">Microsoft Sentinel</span>
   <span class="skill-pill">SharePoint</span>
-
-  <!-- SIEM, Detection & Log Analysis -->
   <span class="skill-pill">SIEM</span>
   <span class="skill-pill">Log Analysis</span>
   <span class="skill-pill">Splunk</span>
   <span class="skill-pill">Elastic Stack (Kibana)</span>
   <span class="skill-pill">KQL</span>
   <span class="skill-pill">SPL</span>
-
-  <!-- Incident Response & Threat Operations -->
+  <span class="skill-pill">Sysmon</span>
+  <span class="skill-pill">Windows Event Logs</span>
   <span class="skill-pill">Incident Response</span>
   <span class="skill-pill">Threat Hunting</span>
-  <span class="skill-pill">Audit & Compliance</span>
+  <span class="skill-pill">Audit &amp; Compliance</span>
   <span class="skill-pill">Risk Assessments</span>
-
-  <!-- Frameworks & Standards -->
-  <span class="skill-pill">MITRE ATT&CK</span>
+  <span class="skill-pill">Tenable Nessus</span>
+  <span class="skill-pill">Vulnerability Management</span>
+  <span class="skill-pill">OSINT</span>
+  <span class="skill-pill">Suricata</span>
+  <span class="skill-pill">Wireshark</span>
+  <span class="skill-pill">PCAP Analysis</span>
+  <span class="skill-pill">Nmap</span>
+  <span class="skill-pill">MITRE ATT&amp;CK</span>
   <span class="skill-pill">NIST 800-53</span>
-
-  <!-- Digital Forensics & Investigation -->
+  <span class="skill-pill">Eric Zimmerman Tools</span>
+  <span class="skill-pill">MFTECmd (MFT &amp; USN)</span>
+  <span class="skill-pill">SrumECmd (SRUM)</span>
+  <span class="skill-pill">LECmd (LNK)</span>
+  <span class="skill-pill">PECmd (Prefetch)</span>
+  <span class="skill-pill">Registry Explorer</span>
+  <span class="skill-pill">Timeline Explorer</span>
+  <span class="skill-pill">Amcache &amp; Shimcache</span>
+  <span class="skill-pill">DB Browser for SQLite</span>
   <span class="skill-pill">Volatility</span>
   <span class="skill-pill">KAPE</span>
-
-  <!-- Automation & Scripting -->
+  <span class="skill-pill">Velociraptor</span>
   <span class="skill-pill">Power Automate</span>
-
-  <!-- Programming & Productivity -->
+  <span class="skill-pill">Python</span>
   <span class="skill-pill">C++</span>
   <span class="skill-pill">Java</span>
   <span class="skill-pill">Excel</span>
@@ -687,6 +775,6 @@
     </main>
   </div>
 
-  <script src="assets/js/main.js?v=5"></script>
+  <script src="assets/js/main.js?v=27"></script>
 </body>
 </html>
