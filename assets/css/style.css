@@ -1,4 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;500;700&display=swap");
+
+/* =====================================================================
+===================================================================== */
 :root {
   --bg-main: #09080a;
   --bg-panel: rgba(17, 13, 20, 0.72);
@@ -2030,10 +2033,7 @@ body:not(.light-mode) .star-icon {
 }
 
 /* =====================================================================
-   HISOKA THEME LAYER
-   Everything below only changes look & feel. Layout rules live above.
-   The elastic Bungee Gum is drawn on a canvas by main.js; the rest is
-   plain CSS, so it all works on GitHub Pages.
+    THEME LAYER
 ===================================================================== */
 :root {
   --harlequin: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2296%22 height=%2296%22 viewBox=%220 0 96 96%22%3E%3Cpolygon points=%2248,0 96,48 48,96 0,48%22 fill=%22rgba(255,255,255,.014)%22 stroke=%22rgba(255,95,174,.10)%22 stroke-width=%221.5%22/%3E%3Ccircle cx=%2248%22 cy=%2248%22 r=%222.2%22 fill=%22rgba(255,95,174,.10)%22/%3E%3C/svg%3E");
@@ -2118,7 +2118,7 @@ body::after {
     linear-gradient(270deg, var(--cur-a), var(--cur-b) 20%, var(--cur-a) 42%, rgba(0, 0, 0, 0) 100%) right top / min(17vw, 260px) 100% no-repeat;
 }
 
-/* ---- Bungee Gum canvas (main.js) ------------------------------------- */
+/* ---- Gum canvas (main.js) ------------------------------------- */
 .gum-canvas {
   position: fixed;
   left: 0;
@@ -2683,7 +2683,7 @@ body.light-mode .highlight {
   50% { opacity: 1; transform: scale(1.06); }
 }
 
-/* ---- Tile reveal: a gum pop ----------------------------------------------- */
+/* ---- Tile reveal: a gum ----------------------------------------------- */
 .reveal {
   opacity: 0;
 }
@@ -2900,7 +2900,7 @@ body.light-mode .hx::after {
 }
 
 
-/* ---- Avatar click: Hisoka's aura (bloodlust that stops Gon and Killua on the 200th floor) ---- */
+/* ---- Avatar click: Hisoka's aura ---- */
 .aura {
   position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden;
   animation: auraIn 0.35s ease-out both;
@@ -3482,3 +3482,12 @@ html.hub-on .gum-canvas { display: none; }
 /* the avatar is clickable (aura) */
 .avatar-box { cursor: pointer; }
 .avatar-box img { cursor: pointer; }
+
+/* Mobile-only: hide Bungee Gum strands if a desktop window is resized.
+   All other Hisoka effects and desktop interactions remain unchanged. */
+@media (max-width: 768px), (hover: none) {
+  .gum-canvas { display: none !important; }
+  .doing-card, .project-card, .cert-card {
+    translate: 0 0;
+  }
+}
