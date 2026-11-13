@@ -202,8 +202,7 @@ function setupGum() {
     n++;
   });
 
-  /* ---- TEXTURE SURPRISE (project tiles): four strands of gum pin the tile at its corners,
-     then the tile takes on the background's texture and blends in for a moment ---- */
+  /* ---- Texttur sup ---- */
   const NS = "http://www.w3.org/2000/svg";
   if (!touch && !reduce) {
     document.querySelectorAll(".experience-card").forEach((card) => {
@@ -371,6 +370,9 @@ function setupGum() {
     }
   });
 
+  // Keep the decorative click / avatar animations on mobile, but disable
+  // the Bungee Gum canvas, elastic strands and tile tugging on touch/mobile.
+  if (!window.matchMedia("(max-width: 768px), (hover: none)").matches) {
   /* ---- canvas ---- */
   const cv = document.createElement("canvas");
   cv.className = "gum-canvas";
@@ -605,6 +607,7 @@ function setupGum() {
   document.addEventListener("pointerout", (e) => {
     if (cooldown && e.target.closest && e.target.closest(TILE) === cooldown && !(e.relatedTarget && cooldown.contains(e.relatedTarget))) cooldown = null;
   });
+  } // End desktop-only Bungee Gum canvas/strands
 }
 
 setupGum();
