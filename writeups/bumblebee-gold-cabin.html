@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BumbleBee - Gold Cabin Write-up | Joan Dimas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="../assets/css/style.css">
+<style>
+    .question-box {
+      margin: 1rem 0 1.5rem;
+      padding: 1rem 1.25rem;
+      background: rgba(var(--accent-rgb), 0.08);
+      border-left: 4px solid var(--accent);
+      border-radius: 12px;
+    }
+
+    .question-box p {
+      color: var(--text-strong);
+      margin: 0;
+    }
+
+    .answer-block {
+      padding: 0.25rem 0 0.5rem;
+    }
+
+    .task {
+      margin-bottom: 3rem;
+    }
+
+    .task h3 {
+      color: var(--accent);
+    }
+  
+
+    /* Match Fog's Hisoka theme while retaining existing page layouts. */
+    .argus-content {
+      min-width: 0;
+    }
+    .argus-content .image-block figcaption {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-top: 0.75rem;
+    }
+    .argus-content ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .argus-content .answer-block p,
+    .argus-content .answer-block li {
+      overflow-wrap: anywhere;
+    }
+    .argus-content pre,
+    .argus-content pre code {
+      white-space: pre;
+    }
+    .argus-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0 2rem;
+    }
+    .argus-content table:not(.ioc-table) th,
+    .argus-content table:not(.ioc-table) td {
+      border: 1px solid var(--border-main);
+      padding: 12px 14px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      color: var(--text-main);
+    }
+    .argus-content table:not(.ioc-table) th {
+      color: var(--text-strong);
+      background: rgba(var(--accent-rgb), 0.20);
+    }
+    .argus-content table:not(.ioc-table) tr:nth-child(even) {
+      background: rgba(var(--accent2-rgb), 0.10);
+    }
+    .argus-content table:not(.ioc-table) tr:nth-child(odd) {
+      background: var(--surface);
+    }
+    .argus-content table:not(.ioc-table) tr:hover {
+      background: rgba(var(--accent-rgb), 0.16);
+    }
+    .argus-content .table-wrap {
+      overflow-x: auto;
+      margin: 1.25rem 0 2rem;
+    }
+    @media (max-width: 700px) {
+      .argus-page { padding: 1.25rem 0.7rem; }
+      .argus-content { padding: 1.5rem 1rem; }
+      .argus-content table:not(.ioc-table) {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+</style>
+</head>
+<body class="project-page"><div class="argus-page">
+<header class="argus-header"><h1>BumbleBee - Gold Cabin Write-up</h1><a class="back-link" href="../index.html">← Back to Writeups</a></header>
+<main class="argus-content">
+<h2>Scenario:</h2>
+<p>CompliantSecure Company has fallen victim to a significant security breach initiated by a phishing email. An unsuspecting employee interacted with the malicious email, allowing the attacker to infiltrate the company's network. Leveraging this initial access, the attacker escalated privileges, gaining control over critical systems, including the Domain Controller.</p>
+<p>This breach has resulted in substantial operational disruption, raising concerns about potential exposure or compromise of sensitive data. Your team has been assigned the critical task of investigating the incident to unravel the attack’s progression and assess the full scope of the compromise.</p>
+<h3>Network Diagram</h3><p>Below is the provided network infrastructure diagram showing the key systems and network segments.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/1.png" alt="CompliantSecure network infrastructure diagram" loading="lazy"><figcaption>CompliantSecure network infrastructure diagram</figcaption></figure><hr class="section-divider">
+<h2>Executive Summary:</h2>
+<p>This investigation reconstructs a multi-stage intrusion against <strong>CompliantSecure</strong> that began with a phishing-related mail connection and a malicious ISO masquerading as an audit package. The downloaded <code>NovaSecure_Audit_Findings.iso</code> contained a shortcut that initiated execution of <code>23.dll</code> through the legitimate Windows utility <code>rundll32.exe</code>. The resulting beacon injected a remote thread into <code>ImagingDevices.exe</code>, performed host and Active Directory reconnaissance, and communicated with external command-and-control infrastructure over TCP/443.</p>
+<p>The attacker progressed from <strong>IT01</strong> toward <strong>DC01</strong>, using credential-dumping tooling, explicit credentials belonging to <code>markw</code>, SMB-based lateral movement, and suspicious service-based execution. On the domain controller, the adversary attempted to establish persistence with a <code>sql_admin</code> account and installed AnyDesk for remote access. Subsequent activity included access to administrative credential-related files on a network share, archive creation (<code>Shares.7z</code>), and a browser download from webmail on Support01.</p>
+<p>In the final observed stage, a payload executed from a network share was associated with <strong>Conti ransomware</strong>, and impacted hosts received the ransom-note file <code>R3ADM3.txt</code>. The records support system compromise and data staging; they do <strong>not</strong> independently establish confirmed data exfiltration or the full number of encrypted hosts.</p>
+<hr class="section-divider">
+<!-- Q1 -->
+<div class="task" id="q1"><h3>Q1:</h3><div class="question-box"><p>The Mail Server logs indicate a connection was made to a suspicious domain known for malicious email activities. What was the IP address of the domain involved in this connection?</p></div><div class="answer-block">
+<p>I began by reviewing <strong>Postfix mail logs</strong> on <strong>MAIL01</strong>. Postfix is a mail transfer agent responsible for transporting email between mail servers, and its logs can provide useful evidence about SMTP activity.</p>
+<p>Postfix logs can reveal:</p>
+<ul>
+<li>IP addresses of remote mail servers connecting to MAIL01.</li>
+<li>Sender and recipient email addresses.</li>
+<li>SMTP authentication attempts and failures.</li>
+<li>Email delivery status.</li>
+<li>Message queue IDs that link related events.</li>
+</ul>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/4.png" alt="Example of Postfix mail log entries" loading="lazy"><figcaption>Postfix mail logs showing details relevant to SMTP connections and email delivery.</figcaption></figure>
+<p>To narrow the investigation to SMTP activity recorded on the mail server, I used the following query:</p>
+<pre><code class="language-text">host.hostname: *MAIL01*  AND *postfix* AND *SMTPD*</code></pre>
+<p>While reviewing the results, the <code>Message</code> field caught my attention because it contained details about incoming SMTP connections.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/5.png" alt="Postfix SMTPD Message field" loading="lazy"><figcaption>Reviewing the Postfix Message field for remote SMTP connection details.</figcaption></figure>
+<p>Further examination revealed a connection associated with the domain <strong><code>emkei.cz</code></strong>. Research into the domain indicated that Emkei is an email-spoofing service, making this connection particularly relevant to the phishing investigation.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/6.png" alt="Postfix log showing the emkei.cz connection and its IP address" loading="lazy"><figcaption>Postfix SMTP connection associated with emkei.cz.</figcaption></figure>
+<p>The connection originated from the following IP address:</p>
+<pre><code class="language-text">114.29.236.247</code></pre>
+<p>The event was recorded on <strong>December 1, 2024, at 20:38:14.592</strong>.</p>
+</div></div>
+<div class="task" id="q2"><h3>Q2:</h3><div class="question-box"><p>During the initial phase of the attack, a suspicious file was downloaded via a webmail client. The file's hash can help confirm its identity and origin. Identify the SHA256 hash of the downloaded file and provide it.</p></div><div class="answer-block"><p>The question references a file downloaded through a <strong>webmail client</strong>, an email interface accessed through a browser, such as Outlook Web, Gmail, or Roundcube. I therefore looked for newly created files in user download and temporary directories around the phishing timeframe.</p>
+<pre><code class="language-text">event.code: &quot;11&quot; AND @timestamp &gt;= &quot;2024-12-01T20:00:00Z&quot; AND @timestamp &lt;= &quot;2024-12-01T23:30:00Z&quot; AND (winlog.event_data.TargetFilename: *Downloads* OR file.path: *Downloads* OR file.path: *Temp*)
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/7.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The file creation sequence drew my attention to <strong><code>NovaSecure_Audit_Findings.iso</code></strong>. Shortly after its arrival, Windows recorded additional files associated with the extracted contents:</p>
+<table>
+<thead>
+<tr>
+  <th>Time (UTC)</th>
+  <th>File created</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>21:02:00</td>
+  <td>Temporary <code>.tmp</code> file</td>
+</tr>
+<tr>
+  <td>21:02:01</td>
+  <td><code>NovaSecure_Audit_Findings.iso:Zone.Identifier</code></td>
+</tr>
+<tr>
+  <td>21:02:21</td>
+  <td><code>NovaSecure_Audit_Findings</code> directory</td>
+</tr>
+<tr>
+  <td>21:02:21</td>
+  <td><code>NovaSecure_Audit_Findings\23.dll</code></td>
+</tr>
+<tr>
+  <td>21:02:21</td>
+  <td><code>NovaSecure_Audit_Findings\Compliance_Reports.lnk</code></td>
+</tr>
+<tr>
+  <td>21:02:21</td>
+  <td><code>NovaSecure_Audit_Findings\Critical_Findings_Summary.pdf</code></td>
+</tr>
+</tbody>
+</table>
+<p>I searched for the ISO filename to retrieve the recorded SHA-256 hash.</p>
+<pre><code class="language-text">&quot;NovaSecure_Audit_Findings.iso&quot;
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/8.png" alt="" loading="lazy"><figcaption></figcaption></figure><p><strong>SHA-256:</strong></p>
+<pre><code class="language-text">F445F806066028D621D8E6A6B949E59342C309DFEB1D517BD847F70069B1B8DD
+</code></pre>
+</div></div>
+<!-- Q3 -->
+<div class="task" id="q3"><h3>Q3:</h3><div class="question-box"><p>During the investigation, it was identified that a file executed by the user initiated a series of events that led to the execution of malicious code. What is the name of the file executed by the user?</p></div><div class="answer-block"><p>The extracted ISO contents included a DLL, a PDF, and a <strong>Windows shortcut (<code>.lnk</code>)</strong>. Because shortcut files can execute commands or launch other programs, I focused on the LNK artifact as the likely user-triggered entry point.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/9.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The executed file was:</p>
+<pre><code class="language-text">Compliance_Reports.lnk
+</code></pre>
+<p>The LNK's presence among ostensibly legitimate audit documents is significant: a shortcut can disguise the malicious execution path behind a document-like name.</p>
+</div></div>
+<!-- Q4 -->
+<div class="task" id="q4"><h3>Q4:</h3><div class="question-box"><p>Following the execution of the previous file, a file was loaded and executed by a legitimate Windows utility as part of the attack chain. What is the name of this file?</p></div><div class="answer-block"><p>I reviewed <strong>Sysmon Event ID 1</strong> process creation records on <strong>IT01</strong> around the ISO extraction and shortcut execution timeframe.</p>
+<pre><code class="language-text">event.code: &quot;1&quot; AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T01:30:00Z&quot; AND host.name:IT01
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/10.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>At <strong>21:02:57 UTC</strong>, the following command appeared:</p>
+<pre><code class="language-text">&quot;C:\Windows\System32\rundll32.exe&quot; 23.dll, StartW
+</code></pre>
+<table>
+<thead>
+<tr>
+  <th>Component</th>
+  <th>Explanation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>rundll32.exe</code></td>
+  <td>Legitimate Windows utility used to load DLLs and invoke exported functions</td>
+</tr>
+<tr>
+  <td><code>23.dll</code></td>
+  <td>The DLL loaded by the utility</td>
+</tr>
+<tr>
+  <td><code>StartW</code></td>
+  <td>The exported function invoked from the DLL</td>
+</tr>
+</tbody>
+</table>
+<p>This is a case of <strong>living-off-the-land execution</strong>: the attacker used a trusted Windows utility to run code from a suspicious DLL rather than launching an obviously malicious executable directly. The surrounding sequence places <code>7zG.exe</code> at <strong>21:02:17</strong>, creation of <code>23.dll</code> at <strong>21:02:21</strong>, and <code>rundll32.exe</code> execution at <strong>21:02:57</strong>.</p>
+<p><strong>Answer:</strong> <code>23.dll</code></p>
+</div></div>
+<!-- Q5 -->
+<div class="task" id="q5"><h3>Q5:</h3><div class="question-box"><p>The beacon spawned an instance of a specific executable. What is the name of the created process?</p>
+<pre><code>ImagingDevices.exe
+</code></pre></div><div class="answer-block"><p>Continuing through the IT01 process creation records, I identified <strong><code>ImagingDevices.exe</code></strong> as the process associated with the beacon's subsequent activity.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/11.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>At <strong>21:10:27 UTC</strong>, this process spawned a command shell to run:</p>
+<pre><code class="language-text">cmd.exe /C ipconfig /all
+</code></pre>
+<p>The subsequent commands included:</p>
+<pre><code class="language-text">cmd.exe /C arp -a
+cmd.exe /C nbtstat -n
+</code></pre>
+<table>
+<thead>
+<tr>
+  <th>Command</th>
+  <th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>ipconfig /all</code></td>
+  <td>Enumerate network interfaces, DNS configuration, and IP settings</td>
+</tr>
+<tr>
+  <td><code>arp -a</code></td>
+  <td>Examine the local ARP cache</td>
+</tr>
+<tr>
+  <td><code>nbtstat -n</code></td>
+  <td>Enumerate local NetBIOS names</td>
+</tr>
+</tbody>
+</table>
+<p>These are typical host and network discovery commands. Their execution from <code>ImagingDevices.exe</code> was especially important once I correlated the process with a remote-thread creation event in Q7.</p>
+<p><strong>Answer:</strong> <code>ImagingDevices.exe</code></p>
+</div></div>
+<!-- Q6 -->
+<div class="task" id="q6"><h3>Q6:</h3><div class="question-box"><p>On DC01, the attacker dropped a compressed archive, likely staging for malicious activities. They then executed a command to extract its contents. What was the exact command used for this operation?</p></div><div class="answer-block"><p>The attacker's reconnaissance also included discovery of the Active Directory environment. Two useful examples were:</p>
+<pre><code class="language-text">nltest /dclist:compliantsecure.store
+nltest /domain_trusts
+</code></pre>
+<p>The first enumerates domain controllers; the second lists domain trust relationships. Both can help identify additional systems and possible lateral movement paths.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/12.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>I then pivoted to <strong>DC01</strong> and reviewed Sysmon process creation records:</p>
+<pre><code class="language-text">event.code: &quot;1&quot; AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot; AND host.name:*DC01*
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/13.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>At <strong>22:07:21 UTC</strong>, the attacker executed:</p>
+<pre><code class="language-text">7zr.exe x 1.7z
+</code></pre>
+<table>
+<thead>
+<tr>
+  <th>Component</th>
+  <th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>7zr.exe</code></td>
+  <td>7-Zip command-line extraction utility</td>
+</tr>
+<tr>
+  <td><code>x</code></td>
+  <td>Extract the archive, preserving directory structure</td>
+</tr>
+<tr>
+  <td><code>1.7z</code></td>
+  <td>The archive being extracted</td>
+</tr>
+</tbody>
+</table>
+<p>Only <strong>23 seconds later</strong>, at <strong>22:07:44</strong>, the following account-creation command was observed:</p>
+<pre><code class="language-text">net user sql_admin P@ssw0rd! /add
+</code></pre>
+<p>The process lineage showed <code>rundll32.exe</code> spawning command shells used for archive extraction and account creation. This connects a DLL-based execution chain with subsequent account-related activity on the domain controller.</p>
+<p><strong>Answer:</strong> <code>7zr.exe x 1.7z</code></p>
+</div></div>
+<!-- Q7 -->
+<div class="task" id="q7"><h3>Q7:</h3><div class="question-box"><p>A process injection occurred on IT01, where a new thread was created in the target process to execute malicious code. What was the start address of the injected code within the target process?</p></div><div class="answer-block"><p>To investigate possible process injection, I searched for <strong>Sysmon Event ID 8 (CreateRemoteThread)</strong> on <strong>IT01</strong>:</p>
+<pre><code class="language-text">event.code: &quot;8&quot; AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot; AND host.name:*IT01*
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/14.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The event recorded the following relationship:</p>
+<table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Timestamp</td>
+  <td>December 1, 2024, 21:09:27 UTC</td>
+</tr>
+<tr>
+  <td>Source process</td>
+  <td><code>rundll32.exe</code></td>
+</tr>
+<tr>
+  <td>Source PID</td>
+  <td><code>4764</code></td>
+</tr>
+<tr>
+  <td>Target process</td>
+  <td><code>ImagingDevices.exe</code></td>
+</tr>
+<tr>
+  <td>Target PID</td>
+  <td><code>9220</code></td>
+</tr>
+<tr>
+  <td>New thread ID</td>
+  <td><code>12652</code></td>
+</tr>
+<tr>
+  <td>Start address</td>
+  <td><code>0x000001C75CB60000</code></td>
+</tr>
+<tr>
+  <td>MITRE ATT&amp;CK</td>
+  <td>T1055 — Process Injection</td>
+</tr>
+</tbody>
+</table>
+<p>This event provides a key link in the attack chain: <code>rundll32.exe</code> loaded the malicious DLL, created a remote thread in <code>ImagingDevices.exe</code>, and then later went on to execute discovery commands. A CreateRemoteThread event is strong injection evidence in this context, although the precise injected code contents are not established by the event alone.</p>
+<p><strong>Answer:</strong></p>
+<pre><code class="language-text">0x000001C75CB60000
+</code></pre>
+</div></div>
+<!-- Q8 -->
+<div class="task" id="q8"><h3>Q8:</h3><div class="question-box"><p>The attacker’s sequence of commands shows a focus on domain-specific reconnaissance on IT01. Which command was executed to explore domain trust relationships within the environment?</p></div><div class="answer-block"><p>While examining the command line activity spawned through <code>ImagingDevices.exe</code>, I encountered the following domain reconnaissance command:</p>
+<pre><code class="language-text">nltest /domain_trusts
+</code></pre>
+<p><code>nltest /domain_trusts</code> enumerates trust relationships for the current domain. In an intrusion, this can help an attacker determine whether additional domains or forests might be reachable through existing trust relationships.</p>
+<p><strong>Answer:</strong> <code>nltest /domain_trusts</code></p>
+</div></div>
+<!-- Q9 -->
+<div class="task" id="q9"><h3>Q9:</h3><div class="question-box"><p>Network scanning activity was observed across the environment on DC01, focusing on key systems with straightforward network reachability tests. Further investigation revealed that the attacker utilized a script to automate these actions. What was the name of the script used in this operation?</p></div><div class="answer-block"><p>I investigated process creation events on <strong>DC01</strong> to identify the automated network reachability checks:</p>
+<pre><code class="language-text">event.code: &quot;1&quot; AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot; AND host.name:*DC01*
+</code></pre>
+<p>At <strong>December 1, 2024, 22:27:12.392</strong>, the parent command line exposed the batch script:</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/15.png" alt="" loading="lazy"><figcaption></figcaption></figure><pre><code class="language-text">C:\Windows\system32\cmd.exe /c &quot;C:\Users\sql_admin\Desktop\1.bat&quot;
+</code></pre>
+<p>The script launched commands including:</p>
+<pre><code class="language-text">ping -n 1 Support01.ad.compliantsecure.store
+ping -n 1 FileServer01.ad.compliantsecure.store
+</code></pre>
+<p>The <code>-n 1</code> argument sends one ICMP echo request per target, allowing the script to quickly determine which internal hosts respond.</p>
+<p><strong>Answer:</strong> <code>1.bat</code></p>
+</div></div>
+<!-- Q10 -->
+<div class="task" id="q10"><h3>Q10:</h3><div class="question-box"><p>On IT01, The attacker dropped a tool for credential dumping during the attack. What is the full path where this tool was created on the system?</p></div><div class="answer-block"><p>During my review of <strong>IT01 Sysmon Event ID 1</strong> records, I found a process associated with the credential-dumping utility <strong>ProcDump</strong>.</p>
+<pre><code class="language-text">event.code: &quot;1&quot; AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot; AND host.name:*IT01*
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/16.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The utility was located at:</p>
+<pre><code class="language-text">C:\ProgramData\procdump64.exe
+</code></pre>
+<p>ProcDump is a legitimate Sysinternals tool, but attackers can abuse it to create memory dumps of sensitive processes such as LSASS. Its presence is suspicious here because of the surrounding intrusion activity.</p>
+</div></div>
+<!-- Q11 -->
+<div class="task" id="q11"><h3>Q11:</h3><div class="question-box"><p>Timing is critical for understanding the attacker’s actions and reconstructing the sequence of events. What was the timestamp when the attacker executed the credential dumping operation?</p></div><div class="answer-block"><p>I correlated the credential-dumping activity identified in the preceding question with its recorded execution timestamp. The event was logged at:</p>
+<pre><code class="language-text">2024-12-01 21:15:03.819
+</code></pre>
+<p>This timestamp anchors the credential-access stage of the investigation and allows it to be compared with the earlier process injection and later explicit-credential authentication events. <strong>Time is reported as recorded in the investigation notes.</strong></p>
+</div></div>
+<!-- Q12 -->
+<div class="task" id="q12"><h3>Q12:</h3><div class="question-box"><p>the attacker dropped a compression tool on IT01. What is the full path where this tool was created on the system?</p></div><div class="answer-block"><p>The same IT01 process creation investigation revealed use of the standalone 7-Zip command-line extractor, <strong><code>7zr.exe</code></strong>.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/17.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>Expanding the process event exposed its working directory and execution context:</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/18.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The associated path identified in the investigation was:</p>
+<pre><code class="language-text">C:\ProgramData\7zr.exe
+</code></pre>
+<p>Because the command line referenced <code>7zr.exe</code> without a full path, the working directory helped identify where it was being run. A current directory is useful supporting evidence, although ideally the complete <code>Image</code> or a file-creation event should be used to confirm the executable's exact on-disk location.</p>
+</div></div>
+<!-- Q13 -->
+<div class="task" id="q13"><h3>Q13:</h3><div class="question-box"><p>Due to a weak password, the attacker quickly cracked the credentials of a domain administrator account and used them to explicitly authenticate on IT01, gaining domain admin privileges. What is the username of the account whose credentials were stolen?</p></div><div class="answer-block"><p>The question describes the attacker obtaining a domain administrator's credentials and then authenticating explicitly on <strong>IT01</strong>. Windows <strong>Security Event ID 4648</strong> is a useful starting point because it records a logon attempt made using <strong>explicit credentials</strong>.</p>
+<pre><code class="language-text">event.code: &quot;4648&quot; AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot; AND host.name:*IT01*
+</code></pre>
+<p>The query returned four relevant events around <strong>22:03 UTC</strong>, including an explicit-credential attempt associated with the user:</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/19.png" alt="" loading="lazy"><figcaption></figcaption></figure><pre><code class="language-text">markw
+</code></pre>
+<p>Event ID 4648 establishes that explicit credentials were supplied for authentication. This heavily indicates that the malicious actor was able to successfuly aquire credentials from their credential dumping acticities seen previously.</p>
+</div></div>
+<!-- Q14 -->
+<div class="task" id="q14"><h3>Q14:</h3><div class="question-box"><p>A specific port was used during the lateral movement from IT01 to DC01. What was the port number?</p></div><div class="answer-block"><p>The lateral movement between <strong>IT01</strong> and <strong>DC01</strong> involved <strong>TCP port 445</strong>, the standard port for <strong>SMB</strong> file sharing and administrative shares.</p>
+<pre><code class="language-text">445
+</code></pre>
+<p>During the DC01 investigation, I also encountered a command accessing a remote SMB share:</p>
+<pre><code class="language-text">&quot;C:\Windows\system32\NOTEPAD.EXE&quot; &quot;\\10.10.11.18\Shares\IT\Admin_Passwords_v3_HASHED.csv&quot;
+</code></pre>
+<p>This separate observation reinforced the presence of SMB activity in the attack, although it accesses a file server rather than independently proving every detail of the IT01-to-DC01 connection. I also observed TCP/445 traffic during the lateral movement timeframe.</p>
+</div></div>
+<!-- Q15 -->
+<div class="task" id="q15"><h3>Q15:</h3><div class="question-box"><p>The malicious executable was stored in a shared location before execution. What was the full path where the executable was first created on DC01?</p></div><div class="answer-block"><p>I pivoted to <strong>Sysmon Event ID 11 (FileCreate)</strong> on <strong>DC01</strong>, filtering for newly created executable files:</p>
+<pre><code class="language-text">event.code: &quot;11&quot; AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot; AND host.name:*DC01* AND winlog.event_data.TargetFilename:*.exe*
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/20.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>At <strong>December 1, 2024, 22:03:41.706</strong>, I identified the suspicious file:</p>
+<pre><code class="language-text">C:\Windows\0453497.exe
+</code></pre>
+<p>An unusually named executable created directly under <code>C:\Windows</code> during active lateral movement warrants investigation, particularly when correlated with subsequent service-based execution.</p>
+</div></div>
+<!-- Q16 -->
+<div class="task" id="q16"><h3>Q16:</h3><div class="question-box"><p>The attacker initiated an RDP connection to DC01 using a compromised account. What is the name of the attacker's workstation?</p></div><div class="answer-block"><p>My first approach was to search for <strong>Event ID 4624, Logon Type 10</strong>, which commonly records successful RDP sessions. However, the expected attacker workstation name was not available in those events.</p>
+<p>I broadened the search to authentication events involving <strong>DC01</strong> and the compromised account:</p>
+<pre><code class="language-text">host.name: *DC01* AND *markw* AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot;
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/21.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>This led me to <strong>Windows Security Event ID 4776</strong>, which records credential validation using NTLM authentication. At <strong>December 1, 2024, 22:12:00.920</strong>, the event contained the workstation name:</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/22.png" alt="" loading="lazy"><figcaption></figcaption></figure><pre><code class="language-text">EC2AMAZ-NVLPEI1
+</code></pre>
+<p>The distinction is important: <strong>4624</strong> describes a logon event on a computer, while <strong>4776</strong> describes NTLM credential validation, often on a domain controller.</p>
+</div></div>
+<!-- Q17 -->
+<div class="task" id="q17"><h3>Q17:</h3><div class="question-box"><p>The attacker utilized the remote access tool to establish a connection to the system and performed the first interactive login using the created account for persistence. At what time did this logon occur?</p></div><div class="answer-block"><p>The attacker had previously attempted to create the <code>sql_admin</code> account on DC01. To find its first interactive logon, I searched successful logon events for that user:</p>
+<pre><code class="language-text">host.name: *DC01* AND event.code:4624 AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot; AND related.user:*sql*
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/23.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The relevant record was a <strong>4624 Logon Type 2</strong>, indicating a local interactive logon, at approximately:</p>
+<pre><code class="language-text">2024-12-01 22:25
+</code></pre>
+<p>Although the scenario refers to a remote access tool, <strong>Logon Type 2 is an interactive console-style logon, not the usual RDP Logon Type 10</strong>. The recorded event establishes the interactive logon type and timestamp.</p>
+</div></div>
+<!-- Q18 -->
+<div class="task" id="q18"><h3>Q18:</h3><div class="question-box"><p>Performed lateral movement to DC01. To establish persistence, they installed a malicious service on DC01. What was the name of the service created on DC01?</p></div><div class="answer-block"><p>I reviewed <strong>Windows System Event ID 7045</strong> on <strong>DC01</strong>, which records a new Windows service installation:</p>
+<pre><code class="language-text">host.name: *DC01* AND event.code:7045 AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot;
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/24.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>One suspicious service installation referenced this executable:</p>
+<pre><code class="language-text">\\10.10.11.156\ADMIN$\0453497.exe
+</code></pre>
+<p>The use of an administrative SMB share and a service running as <strong>LocalSystem</strong> is consistent with remote service-based execution. <strong>Service name seen in screenshot.</strong>
+</div></div>
+<!-- Q19 -->
+<div class="task" id="q19"><h3>Q19:</h3><div class="question-box"><p>To establish persistence on DC01, the attacker created a new local user account and elevated its privileges. What were the username and password set for this account?</p></div><div class="answer-block"><p>While investigating process creation events on <strong>DC01</strong>, I had already identified a command attempting to create a local account shortly after archive extraction:</p>
+<pre><code class="language-text">net user sql_admin P@ssw0rd! /add
+</code></pre>
+<p>The account and password specified in the command were:</p>
+<pre><code class="language-text">Username: sql_admin
+Password: P@ssw0rd!
+</code></pre>
+<p>The <code>/add</code> parameter creates a user account. </div></div>
+<!-- Q20 -->
+<div class="task" id="q20"><h3>Q20:</h3><div class="question-box"><p>The attacker installed a remote access tool on DC01 to enable persistent remote access and ensure continued control over the system. At what exact time was this service installed?</p></div><div class="answer-block"><p>While reviewing <strong>DC01 Event ID 7045</strong> service installations for the preceding question, I also observed creation of an <strong>AnyDesk</strong> service shortly after the suspicious remote service activity.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/25.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The recorded installation time was approximately:</p>
+<pre><code class="language-text">2024-12-01 22:17
+</code></pre>
+<p>AnyDesk is legitimate remote access software, but an unexpected installation on a domain controller during an intrusion provides a potential method for persistent interactive access.</p>
+</div></div>
+<!-- Q21 -->
+<div class="task" id="q21"><h3>Q21:</h3><div class="question-box"><p>After executing the reconnaissance script, the attacker directed their efforts toward a network folder share. Navigating through the shared directories, they stumbled upon a file that potentially contained critical information. This file was subsequently opened. What was the name of the file accessed by the attacker in this operation?</p></div><div class="answer-block"><p>I returned to the <strong>DC01 Sysmon Event ID 1</strong> records to follow the activity after the <code>1.bat</code> network discovery script.</p>
+<pre><code class="language-text">host.name: *DC01* AND event.code:1 AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot;
+</code></pre>
+<p>At <strong>December 1, 2024, 22:29:46.591</strong>, Notepad was launched with a CSV file on a remote SMB share:</p>
+<pre><code class="language-text">&quot;C:\Windows\system32\NOTEPAD.EXE&quot; \\10.10.11.18\Shares\IT\Admin_Passwords_v3_HASHED.csv
+</code></pre>
+<p>The file server was <strong><code>10.10.11.18</code></strong>, and the file was:</p>
+<pre><code class="language-text">Admin_Passwords_v3_HASHED.csv
+</code></pre>
+<p>The filename suggests the document could hold sensitive administrative credential material, making this a noteworthy discovery and collection opportunity. Its actual contents were not included in the supplied evidence.</p>
+</div></div>
+<!-- Q22 -->
+<div class="task" id="q22"><h3>Q22:</h3><div class="question-box"><p>The attacker leveraged an RDP connection from DC01 to FileServer01 to access and collect sensitive documents. After gathering the files, the attacker used a compression utility to archive them into a single file, preparing the data for exfiltration. What was the name of the compressed file created by the attacker during this operation?</p></div><div class="answer-block"><p>Following access to network shares on <strong>FILESERVER01</strong>, I reviewed process creation events on <strong>DC01</strong> for file staging or archiving activity:</p>
+<pre><code class="language-text">host.name: *DC01* AND event.code:1 AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot;
+</code></pre>
+<p>At <strong>December 1, 2024, 22:38:24 UTC</strong>, the attacker executed:</p>
+<pre><code class="language-text">7zr.exe a -t7z Shares.7z Shares
+</code></pre>
+<p>Here, <code>a</code> tells 7-Zip to <strong>add files to an archive</strong>, <code>-t7z</code> selects the 7z format, <code>Shares.7z</code> names the output archive, and <code>Shares</code> identifies the source directory. This indicates that collected share data was packaged into:</p>
+<pre><code class="language-text">Shares.7z
+</code></pre>
+<p>The archive's creation is consistent with <strong>data staging for potential exfiltration</strong>; this command alone does not prove that the archive was transferred outside the environment.</p>
+</div></div>
+<!-- Q23 -->
+<div class="task" id="q23"><h3>Q23:</h3><div class="question-box"><p>The attacker initiated an RDP connection from their workstation to <strong>Support01</strong> and accessed the mail server through a web browser. Using compromised credentials—reused by the domain admin for both Active Directory and the mail server—they successfully logged in. Then, the attacker downloaded a file containing potentially sensitive information from the compromised email account.</p></div><div class="answer-block"><p>The next lead involved <strong>Support01</strong>, where the attacker accessed webmail using the compromised <code>markw</code> identity. I searched file creation activity associated with Chrome:</p>
+<pre><code class="language-text">host.name: *Support01* AND event.code: &quot;11&quot; AND winlog.event_data.Image: *chrome.exe AND @timestamp &gt;= &quot;2024-12-01T22:00:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot;
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/26.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>At <strong>December 1, 2024, 22:44:57.701</strong>, Chrome created evidence associated with a downloaded CSV in the <code>markw</code> user profile.</p>
+<table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Host</td>
+  <td><code>Support01</code></td>
+</tr>
+<tr>
+  <td>Timestamp</td>
+  <td>2024-12-01 22:44:57.701</td>
+</tr>
+<tr>
+  <td>Process</td>
+  <td><code>chrome.exe</code></td>
+</tr>
+<tr>
+  <td>User profile</td>
+  <td><code>markw</code></td>
+</tr>
+<tr>
+  <td>Downloaded file candidate</td>
+  <td><code>Accounts_Updates_1524.csv</code></td>
+</tr>
+</tbody>
+</table>
+<p>The <code>:Zone.Identifier</code> suffix is an <strong>NTFS Alternate Data Stream (ADS)</strong> commonly associated with <strong>Mark-of-the-Web (MotW)</strong> metadata. In this case, its creation by Chrome supports the conclusion that the CSV was downloaded through the browser.</p>
+<p><strong>Identified file:</strong> <code>Accounts_Updates_1524.csv</code></p>
+</div></div>
+<!-- Q24 -->
+<div class="task" id="q24"><h3>Q24:</h3><div class="question-box"><p>Following the execution of the initial access malicious file, a network connection was established with a Command and Control (C2) server. What is the destination IP address and port to which the connection was made?</p></div><div class="answer-block"><p>To identify the initial beacon's outbound connection, I searched <strong>Sysmon Event ID 3 (NetworkConnect)</strong> on <strong>IT01</strong>:</p>
+<pre><code class="language-text">host.name: *IT01* AND event.code:3 AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot;
+</code></pre>
+<p>I then focused on the processes implicated in initial execution, especially <code>rundll32.exe</code>.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/27.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The timeline showed <code>rundll32.exe</code> executing <code>23.dll</code> through its <code>StartW</code> export at <strong>21:02:57</strong>, connecting to the following destination around <strong>21:03:00</strong>, and connecting again around <strong>21:04:00</strong>:</p>
+<pre><code class="language-text">3.68.97.124:443
+</code></pre>
+<p>This network activity preceded the process injection into <code>ImagingDevices.exe</code> at <strong>21:09:27</strong>, connecting the original DLL execution to the first observed external C2 destination.</p>
+</div></div>
+<!-- Q25 -->
+<div class="task" id="q25"><h3>Q25:</h3><div class="question-box"><p>The spawned process by the beacon established a network connection to another external Command-and-Control (C2) server. What is the IP address and port of the C2 server that was contacted?</p></div><div class="answer-block"><p>I first tried <strong>Sysmon Event ID 3</strong>, but it did not return the connection made by the injected <code>ImagingDevices.exe</code> process. I therefore pivoted to <strong>Windows Security Event ID 5156</strong>, which records connections permitted by the <strong>Windows Filtering Platform (WFP)</strong> when the relevant audit policy is enabled.</p>
+<pre><code class="language-text">host.name: *IT01* AND event.code: &quot;5156&quot; AND message: *ImagingDevices*
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/28.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The event contained the following details:</p>
+<table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Host</td>
+  <td><code>IT01</code></td>
+</tr>
+<tr>
+  <td>Event</td>
+  <td>5156 — WFP permitted connection</td>
+</tr>
+<tr>
+  <td>Source process</td>
+  <td><code>ImagingDevices.exe</code></td>
+</tr>
+<tr>
+  <td>Process ID</td>
+  <td><code>9220</code></td>
+</tr>
+<tr>
+  <td>Destination IP</td>
+  <td><code>18.193.157.255</code></td>
+</tr>
+<tr>
+  <td>Destination port</td>
+  <td><code>443</code></td>
+</tr>
+<tr>
+  <td>Timestamp</td>
+  <td>2024-12-01 21:09:27.669 UTC</td>
+</tr>
+</tbody>
+</table>
+<p>The correlation is particularly strong: Sysmon Event ID 8 recorded <code>rundll32.exe</code> creating a remote thread in <code>ImagingDevices.exe</code> at <strong>21:09:27.376</strong>, while Event ID 5156 recorded the process connecting out at <strong>21:09:27.669</strong>—approximately <strong>293 milliseconds later</strong>.</p>
+<p><strong>Answer:</strong></p>
+<pre><code class="language-text">18.193.157.255:443
+</code></pre>
+<p>This illustrates why searching multiple telemetry sources matters: Event ID 5156 may expose a permitted connection that is absent from the available Sysmon Event ID 3 records. An allowed connection is not, by itself, proof of successful application-layer C2 communication, but the surrounding injection evidence makes this connection highly suspicious.</p>
+</div></div>
+<!-- Q26 -->
+<div class="task" id="q26"><h3>Q26:</h3><div class="question-box"><p>After obtaining domain admin privileges on DC01, the attacker established a network connection to an external Command-and-Control (C2) server. What was the destination IP address and port of this connection?</p></div><div class="answer-block"><p>On <strong>DC01</strong>, I searched <strong>Sysmon Event ID 3</strong> for outbound network activity following the attacker's domain controller compromise:</p>
+<pre><code class="language-text">host.name: *DC01* AND event.code:3 AND @timestamp &gt;= &quot;2024-12-01T20:55:00Z&quot; AND @timestamp &lt;= &quot;2024-12-02T03:30:00Z&quot;
+</code></pre>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/29.png" alt="" loading="lazy"><figcaption></figcaption></figure><p>The results showed a high volume of outbound connections to:</p>
+<pre><code class="language-text">3.68.27.19:443
+</code></pre>
+<p>The repeated connections from the compromised DC01 host, in conjunction with the other malicious activity, identified this destination as the additional C2 endpoint described in the lab.</p>
+</div></div>
+<!-- Q27 -->
+<div class="task" id="q27"><h3>Q27:</h3><div class="question-box"><p>The attacker placed a malicious file in a shared folder accessible across the network and executed it remotely on multiple machines. What was the path from which the malicious file was executed?</p></div><div class="answer-block"><p>During the later stages of the investigation, I observed suspicious execution of <strong><code>patch.exe</code></strong> from a network share. The activity was also associated with the creation of ransom-related text files on affected systems.</p>
+<p>The executable path was:</p>
+<pre><code class="language-text">\\10.10.11.18\Shares\patch.exe
+</code></pre>
+<p>To verify execution across endpoints, I used a broad process creation search:</p>
+<pre><code class="language-text">event.code: &quot;1&quot;
+AND winlog.event_data.Image: *patch.exe
+</code></pre>
+<p>Because the executable was stored on a shared SMB path, the same payload could be launched remotely across multiple hosts without requiring a unique local file path on each machine.</p>
+</div></div>
+<!-- Q28 -->
+<div class="task" id="q28"><h3>Q28:</h3><div class="question-box"><p>The malware executed across multiple machines on the network was identified as part of a well-known ransomware family. What is the name of the ransomware family associated with the malware?</p></div><div class="answer-block"><p>I used the suspicious ransomware executable identified in the previous question to obtain its SHA-256 hash:</p>
+<pre><code class="language-text">D9243AF49F96C8B66715287D0DC26DBD82EAB8570D5F20629DDF9E5FE06C051C
+</code></pre>
+<p>A VirusTotal lookup associated the hash with the <strong>Conti</strong> ransomware family.</p>
+<figure class="image-block"><img src="../assets/images/bumblebee-gold-cabin/30.png" alt="" loading="lazy"><figcaption></figcaption></figure><p><strong>Answer:</strong> <code>Conti</code></p>
+<p>This identification is based on the hash reputation result documented in the investigation, it should be treated as a malware-family association rather than independent proof of the operator's identity.</p>
+</div></div>
+<!-- Q29 -->
+<div class="task" id="q29"><h3>Q29:</h3><div class="question-box"><p>A message files were dropped on the infected systems, which likely contained ransom instructions. What was the name of the message file dropped by the malware?</p></div><div class="answer-block"><p>The ransomware execution was accompanied by the creation of a message file on affected systems. The identified filename was:</p>
+<pre><code class="language-text">R3ADM3.txt
+</code></pre>
+<p>Ransomware commonly drops note files to communicate payment instructions or other demands to victims. In this investigation, <code>R3ADM3.txt</code> is an impact artifact that can help defenders locate additional affected systems.</p>
+</div></div>
+<hr class="section-divider"><div class="task"><h2>Attack Timeline</h2>
+<p>Events below reflect timestamps recorded in the investigation notes. The notes generally use UTC; a few entries are approximate to the minute.</p>
+<table class="ioc-table"><thead><tr><th>Date / Time (UTC)</th><th>Host / Stage</th><th>Observed activity</th></tr></thead><tbody>
+<tr><td><code>2024-12-01 20:38:14.592</code></td><td>MAIL01</td><td>Suspicious Postfix SMTP connection from 114.29.236.247 associated with emkei.cz</td></tr>
+<tr><td><code>2024-12-01 21:02:01</code></td><td>IT01</td><td>NovaSecure_Audit_Findings.iso Mark-of-the-Web metadata recorded</td></tr>
+<tr><td><code>2024-12-01 21:02:17–21:02:21</code></td><td>IT01</td><td>7zG.exe launched and ISO-associated files, including 23.dll and Compliance_Reports.lnk, appeared</td></tr>
+<tr><td><code>2024-12-01 21:02:57</code></td><td>IT01</td><td>rundll32.exe invoked 23.dll, StartW</td></tr>
+<tr><td><code>2024-12-01 21:03:00</code></td><td>IT01</td><td>rundll32.exe connected to 3.68.97.124:443; another connection recorded around 21:04</td></tr>
+<tr><td><code>2024-12-01 21:09:27.376</code></td><td>IT01</td><td>rundll32.exe created a remote thread in ImagingDevices.exe</td></tr>
+<tr><td><code>2024-12-01 21:09:27.669</code></td><td>IT01</td><td>ImagingDevices.exe connected to 18.193.157.255:443 (WFP Event 5156)</td></tr>
+<tr><td><code>2024-12-01 21:10:27</code></td><td>IT01</td><td>ImagingDevices.exe spawned host and network reconnaissance commands</td></tr>
+<tr><td><code>2024-12-01 21:15:03.819</code></td><td>IT01</td><td>Credential-dumping operation timestamp</td></tr>
+<tr><td><code>2024-12-01 ~22:03</code></td><td>IT01 / DC01</td><td>Explicit credential use involving markw; DC01 executable created at 22:03:41.706</td></tr>
+<tr><td><code>2024-12-01 22:07:21</code></td><td>DC01</td><td>7zr.exe extracted 1.7z</td></tr>
+<tr><td><code>2024-12-01 22:07:44</code></td><td>DC01</td><td>Command attempted to create sql_admin account</td></tr>
+<tr><td><code>2024-12-01 22:12:00.920</code></td><td>DC01</td><td>NTLM validation event recorded attacker workstation EC2AMAZ-NVLPEI1</td></tr>
+<tr><td><code>2024-12-01 ~22:17</code></td><td>DC01</td><td>AnyDesk service installation observed</td></tr>
+<tr><td><code>2024-12-01 ~22:25</code></td><td>DC01</td><td>sql_admin interactive logon (Event 4624, Logon Type 2)</td></tr>
+<tr><td><code>2024-12-01 22:27:12.392</code></td><td>DC01</td><td>1.bat automated ping checks against internal hosts</td></tr>
+<tr><td><code>2024-12-01 22:29:46.591</code></td><td>DC01 / FileServer01</td><td>Notepad opened Admin_Passwords_v3_HASHED.csv from SMB share</td></tr>
+<tr><td><code>2024-12-01 22:38:24</code></td><td>DC01</td><td>7zr.exe created Shares.7z archive</td></tr>
+<tr><td><code>2024-12-01 22:44:57.701</code></td><td>Support01</td><td>Chrome downloaded Accounts_Updates_1524.csv or created its Zone.Identifier</td></tr>
+<tr><td><code>Time not specified</code></td><td>Multiple systems</td><td>patch.exe executed from network share; Conti-associated ransomware and R3ADM3.txt observed</td></tr>
+</tbody></table></div>
+<hr class="section-divider"><div class="task"><h2>Indicators of Compromise (IOC)</h2><p>These indicators include malicious artifacts, contextual host/user identifiers, and attack infrastructure observed in the lab.</p><table class="ioc-table"><thead><tr><th>Type</th><th>Indicator</th><th>Significance</th></tr></thead><tbody>
+<tr><td>External IP</td><td><code>114.29.236.247</code></td><td>Suspicious SMTP connection to MAIL01</td></tr>
+<tr><td>Domain</td><td><code>emkei.cz</code></td><td>Email-spoofing service associated with observed SMTP activity</td></tr>
+<tr><td>Internal host</td><td><code>MAIL01 / 10.10.3.108</code></td><td>Mail server investigated for initial phishing activity</td></tr>
+<tr><td>Initial payload</td><td><code>NovaSecure_Audit_Findings.iso</code></td><td>Downloaded ISO containing suspicious LNK and DLL artifacts</td></tr>
+<tr><td>SHA-256 — ISO</td><td><code>F445F806066028D621D8E6A6B949E59342C309DFEB1D517BD847F70069B1B8DD</code></td><td>Hash of the downloaded ISO</td></tr>
+<tr><td>Shortcut</td><td><code>Compliance_Reports.lnk</code></td><td>User-executed shortcut linked to initial malicious execution</td></tr>
+<tr><td>DLL</td><td><code>23.dll</code></td><td>DLL executed through rundll32.exe StartW</td></tr>
+<tr><td>Process</td><td><code>rundll32.exe</code></td><td>Legitimate utility used to load suspicious DLL and initiate injection</td></tr>
+<tr><td>Injected process</td><td><code>ImagingDevices.exe</code></td><td>Remote thread target and second outbound C2 process</td></tr>
+<tr><td>Thread start address</td><td><code>0x000001C75CB60000</code></td><td>Observed Sysmon Event 8 remote-thread start address; memory-specific</td></tr>
+<tr><td>C2</td><td><code>3.68.97.124:443</code></td><td>Initial rundll32.exe outbound connection</td></tr>
+<tr><td>C2</td><td><code>18.193.157.255:443</code></td><td>Outbound connection from injected ImagingDevices.exe</td></tr>
+<tr><td>C2</td><td><code>3.68.27.19:443</code></td><td>Repeated DC01 connections</td></tr>
+<tr><td>Credential access tool</td><td><code>C:\ProgramData\procdump64.exe</code></td><td>ProcDump found on IT01</td></tr>
+<tr><td>Compression tool</td><td><code>C:\ProgramData\7zr.exe</code></td><td>7-Zip extraction utility on IT01</td></tr>
+<tr><td>Archive</td><td><code>1.7z</code></td><td>Archive extracted on DC01</td></tr>
+<tr><td>Dropped executable</td><td><code>C:\Windows\0453497.exe</code></td><td>Executable created on DC01</td></tr>
+<tr><td>Remote service path</td><td><code>\\10.10.11.156\ADMIN$\0453497.exe</code></td><td>Suspicious service executable over ADMIN$; service name not supplied</td></tr>
+<tr><td>Created account</td><td><code>sql_admin</code></td><td>Persistence-related account attempted on DC01</td></tr>
+<tr><td>Credential</td><td><code>P@ssw0rd!</code></td><td>Password specified for sql_admin in account-creation command</td></tr>
+<tr><td>Compromised account</td><td><code>markw</code></td><td>Explicit-credential authentication and Support01 activity</td></tr>
+<tr><td>Workstation</td><td><code>EC2AMAZ-NVLPEI1</code></td><td>Workstation name in NTLM Event 4776</td></tr>
+<tr><td>Remote access</td><td><code>AnyDesk</code></td><td>Remote access tool installed on DC01</td></tr>
+<tr><td>Recon script</td><td><code>C:\Users\sql_admin\Desktop\1.bat</code></td><td>Automated internal connectivity checks</td></tr>
+<tr><td>Sensitive file</td><td><code>Admin_Passwords_v3_HASHED.csv</code></td><td>Credential-related CSV accessed from SMB share</td></tr>
+<tr><td>Internal share</td><td><code>\\10.10.11.18\Shares\IT\</code></td><td>Share containing credential-related CSV</td></tr>
+<tr><td>Data staging archive</td><td><code>Shares.7z</code></td><td>Compressed collection of shared files</td></tr>
+<tr><td>Downloaded CSV</td><td><code>Accounts_Updates_1524.csv</code></td><td>Browser download candidate on Support01</td></tr>
+<tr><td>Ransomware payload</td><td><code>\\10.10.11.18\Shares\patch.exe</code></td><td>Executable launched from SMB share</td></tr>
+<tr><td>SHA-256 — ransomware</td><td><code>D9243AF49F96C8B66715287D0DC26DBD82EAB8570D5F20629DDF9E5FE06C051C</code></td><td>Hash associated with Conti via reputation lookup</td></tr>
+<tr><td>Ransomware family</td><td><code>Conti</code></td><td>Ransomware-family association in lab investigation</td></tr>
+<tr><td>Ransom note</td><td><code>R3ADM3.txt</code></td><td>Message artifact dropped on affected systems</td></tr>
+</tbody></table></div>
+</main></div></body></html>

